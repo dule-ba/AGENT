@@ -22,5 +22,11 @@
     "temperature": 0.3,
     "max_tokens": 1500,
     "system_prompt": "You are a debugging assistant specialized in finding and fixing errors in code."
+  },
+  "executor": {
+    "model": "gpt-4o",
+    "temperature": 0.8,
+    "max_tokens": 1200,
+    "system_prompt": "You are a conversational assistant that helps users understand and use the AI Agent Platform."
   }
 }

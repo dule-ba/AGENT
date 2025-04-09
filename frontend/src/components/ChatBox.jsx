@@ -34,11 +34,9 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
       setSessionInfo({ active: true, id: currentSession });
     }
     
-    // Učitaj spremljene postavke iz localStorage
-    const savedMcpServer = localStorage.getItem('mcp_preferred_server');
-    if (savedMcpServer) {
-      setSelectedMcpServer(savedMcpServer);
-    }
+    // Uvijek koristi "anthropic" kao MCP server jer backend podržava samo taj
+    localStorage.setItem('mcp_preferred_server', 'anthropic');
+    setSelectedMcpServer('anthropic');
     
     const savedModel = localStorage.getItem('mcp_preferred_model');
     if (savedModel) {
@@ -124,7 +122,8 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
         // Dodaj odgovor u chat povijest
         const assistantResponse = {
           type: 'assistant',
-          text: result.codeResult?.response || 
+          text: result.workflowResult?.response ||
+                result.codeResult?.response || 
                 (result.codeResult ? result.codeResult.text : '') || 
                 result.message ||
                 "Workflow završen",
@@ -286,9 +285,12 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
 
   // Handler za promjenu MCP servera
   const handleMcpServerChange = (server) => {
-    setSelectedMcpServer(server);
-    localStorage.setItem('mcp_preferred_server', server);
+    // Uvijek koristimo "anthropic" bez obzira na odabir
+    const forcedServer = 'anthropic';
+    setSelectedMcpServer(forcedServer);
+    localStorage.setItem('mcp_preferred_server', forcedServer);
     setShowMcpDropdown(false);
+    console.log('MCP server postavljen na:', forcedServer, '(korisnički odabir ignoriran)');
   };
   
   // Handler za promjenu modela

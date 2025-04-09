@@ -1,12 +1,13 @@
 // API klijent za komunikaciju s backend servisom
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8080';
 
 // Lokalna varijabla za praćenje session_id-a
 let currentSessionId = localStorage.getItem('current_session_id') || null;
 
 // Postavi sesiju pri pokretanju
 console.log(`Inicijalna sesija: ${currentSessionId || 'nova sesija'}`);
+console.log(`API_BASE_URL = ${API_BASE_URL}`);
 
 // Glavni API poziv za komunikaciju s agentima
 export const sendChatMessage = async (message, agent = 'executor', options = {}) => {
@@ -14,11 +15,23 @@ export const sendChatMessage = async (message, agent = 'executor', options = {})
   
   try {
     console.log(`Šaljem poruku sa ID sesije: ${currentSessionId || 'nova sesija'}`);
+    console.log(`Šaljem na URL: ${API_BASE_URL}/chat`);
+    console.log(`Payload: `, JSON.stringify({
+        message,
+        agent,
+        auto_process,
+        model,
+        temperature,
+        mcp_server: mcpServer,
+        session_id: currentSessionId
+    }));
     
     const response = await fetch(`${API_BASE_URL}/chat`, {
       method: 'POST',
+      mode: 'cors',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({
         message,
@@ -32,10 +45,12 @@ export const sendChatMessage = async (message, agent = 'executor', options = {})
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`);
+      console.error(`API error: ${response.statusText}, Status: ${response.status}`);
+      throw new Error(`API error: ${response.statusText}, Status: ${response.status}`);
     }
 
     const result = await response.json();
+    console.log('API odgovor primljen:', result);
     
     // Spremi session_id za buduće pozive
     if (result.session_id) {
@@ -48,6 +63,8 @@ export const sendChatMessage = async (message, agent = 'executor', options = {})
     return result;
   } catch (error) {
     console.error('Error sending chat message:', error);
+    console.error('Error details:', error.message, error.stack);
+    console.error('Network status:', navigator.onLine ? 'Konekcija dostupna' : 'Nema konekcije');
     throw error;
   }
 };
@@ -62,8 +79,10 @@ export const executeCode = async (code, language, mode = 'script', sessionId = n
     
     const response = await fetch(`${API_BASE_URL}/execute-code`, {
       method: 'POST',
+      mode: 'cors',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({
         code,
@@ -116,263 +135,441 @@ export const executeCode = async (code, language, mode = 'script', sessionId = n
 
 // API poziv za izvršavanje lanca operacija (code -> execute -> debug -> web preview)
 export const executeWorkflow = async (message, options = {}) => {
-  const { 
-    model = 'default', 
-    temperature = 0.7, 
-    agent = 'code', 
+  const {
+    model = 'default',
+    temperature = 0.7,
+    mcpServer = 'anthropic',
+    workflowType = 'code',
+    confirmationMode = true,
+    continueExecution = false,
+    previousResponse = null
+  } = options;
+
+  // Ako nastavljamo izvršavanje nakon potvrde korisnika
+  if (continueExecution && previousResponse) {
+    return continueWorkflowExecution(previousResponse, options);
+  }
+
+  let initialAgentResponse;
+  let plannerResponse;
+  const originalPrompt = message;
+
+  try {
+    // Korak 1: Poziv Executor agentu da razumije namjeru
+    console.log(`Workflow - Korak 1: Pozivam Executor agenta da razumije upit: "${message}"`);
+    try {
+      initialAgentResponse = await sendChatMessage(
+        message,
+        'executor',
+        { model, temperature, mcpServer, auto_process: false }
+      );
+
+      if (!initialAgentResponse || !initialAgentResponse.response) {
+        throw new Error('Nema odgovora od Executor agenta');
+      }
+    } catch (fetchError) {
+      console.error('Greška u komunikaciji s backendom:', fetchError);
+      return {
+        status: 'error',
+        message: 'Greška tijekom izvršavanja workflow-a: ' + (fetchError.message || 'Failed to fetch'),
+        phase: 'intent_analysis_failed',
+        workflowResult: {
+          error: fetchError.message || 'Neuspješna komunikacija s backendom. Provjerite da li backend server radi.',
+          agents: ['Executor'],
+          initialResponse: "Greška u komunikaciji s backendom. Provjerite da li backend radi."
+        },
+        originalPrompt
+      };
+    }
+
+    // Korak 1.5: Dobijanje plana izvršavanja od planner agenta
+    console.log(`Workflow - Korak 1.5: Pozivam Planner agenta za plan izvršavanja...`);
+    try {
+      const plannerMessage = `Na osnovu korisničkog zahtjeva: "${message}", napravi detaljan plan izvršavanja. 
+Koje korake treba poduzeti da se ispuni ovaj zahtjev? 
+Koji agenti trebaju biti uključeni? 
+Objasni korisniku kako ćeš riješiti njegov zadatak.`;
+      
+      plannerResponse = await sendChatMessage(
+        plannerMessage,
+        'planner',
+        { model, temperature, mcpServer, auto_process: false }
+      );
+
+    } catch (plannerError) {
+      console.log('Greška pri dobijanju plana, nastavljam bez plana:', plannerError);
+      plannerResponse = {
+        response: "Nije bilo moguće generisati plan izvršavanja. Nastavit ću s izvršavanjem na osnovu dostupnih informacija."
+      };
+    }
+
+    // Dodamo plan u rezultat koji vraćamo 
+    const executorAnalysis = initialAgentResponse.response;
+    const plan = plannerResponse?.response || "Plan nije dostupan.";
+    
+    // Provjera da li treba generisati kod (slična logika kao prije)
+    const executorResponseText = initialAgentResponse.response.toLowerCase();
+    const suggestedAgent = initialAgentResponse.suggested_agent;
+    const requiresCode = suggestedAgent === 'code' ||
+                   executorResponseText.includes('programiranje') ||
+                   executorResponseText.includes('kod') ||
+                   executorResponseText.includes('napravi') ||
+                   executorResponseText.includes('kreiraj') ||
+                   executorResponseText.includes('```');
+
+    // Ako je uključen confirmation mode, vrati samo rezultat prve faze i traži potvrdu
+    if (confirmationMode) {
+      console.log('Workflow - Vraćam plan i čekam potvrdu korisnika prije nastavka.');
+      return {
+        status: 'awaiting_confirmation',
+        message: 'Čekam potvrdu korisnika za nastavak izvršavanja.',
+        phase: 'planning',
+        workflowResult: {
+          executorAnalysis: executorAnalysis,
+          initialResponse: plan,
+          suggestedAgent: suggestedAgent,
+          requiresCode: requiresCode,
+          agents: ['Executor', 'Planner']
+        },
+        originalPrompt
+      };
+    }
+
+    // Ako nije uključen confirmation mode, automatski nastavi s izvršavanjem
+    const continueOptions = { 
+      ...options, 
+      continueExecution: true,
+      confirmationMode: false
+    };
+
+    // Nastavi s izvršavanjem
+    return continueWorkflowExecution({
+      executorAnalysis,
+      initialResponse: plan,
+      suggestedAgent: suggestedAgent,
+      requiresCode,
+      originalPrompt
+    }, continueOptions);
+
+  } catch (error) {
+    console.error('Greška tokom izvršavanja workflow-a:', error);
+    return {
+      status: 'error',
+      message: `Greška tijekom izvršavanja workflow-a: ${error.message}`,
+      phase: 'error',
+      workflowResult: {
+        error: error.message,
+        initialResponse: "Došlo je do greške u izvršavanju workflow-a."
+      }
+    };
+  }
+};
+
+// Nastavak izvršavanja workflow-a nakon potvrde
+const continueWorkflowExecution = async (previousState, options = {}) => {
+  const {
+    model = 'default',
+    temperature = 0.7,
     mcpServer = 'anthropic',
     workflowType = 'code'
   } = options;
-  
+
+  const { 
+    executorAnalysis, 
+    initialResponse, 
+    suggestedAgent, 
+    requiresCode, 
+    originalPrompt 
+  } = previousState;
+
+  let codeAgentResponse;
+  let generatedCode = null;
+  let generatedLanguage = 'text';
+  let codeBlocks = {};
+
   try {
-    // Korak 1: Generisanje koda
-    console.log(`Pokretanje workflow-a: ${workflowType} koristeći ${mcpServer} MCP sa agentom: ${agent}`);
-    
-    // Osnovni odgovor od početnog agenta
-    const codeResult = await sendChatMessage(
-      message, 
-      agent,
-      { model, temperature, mcpServer }
-    );
-    
-    // Ako nema ispravnog odgovora, vrati trenutni rezultat
-    if (!codeResult.response) {
-      return { 
-        status: 'error', 
-        message: 'Nema odgovora od agenta', 
-        phase: 'initial_response', 
-        result: codeResult 
-      };
+    // Korak 2: Ako je potreban kod, pozovi Code agenta
+    if (requiresCode) {
+      console.log(`Workflow - Korak 2: Pozivam Code agenta...`);
+      const codeAgentMessage = `Na osnovu zahtjeva korisnika: "${originalPrompt}", molim te generiši odgovarajući kod.`;
+
+      try {
+        codeAgentResponse = await sendChatMessage(
+          codeAgentMessage,
+          'code',
+          { model, temperature, mcpServer, auto_process: false }
+        );
+
+        if (!codeAgentResponse || !codeAgentResponse.response) {
+          console.warn('Code agent nije vratio odgovor, pokušavam koristiti odgovor Executora.');
+          codeBlocks = extractCodeBlocks(executorAnalysis);
+        } else {
+          codeBlocks = extractCodeBlocks(codeAgentResponse.response);
+        }
+      } catch (codeError) {
+        console.error('Greška kod poziva Code agenta:', codeError);
+        return {
+          status: 'error',
+          message: 'Greška kod generisanja koda: ' + (codeError.message || 'Failed to fetch'),
+          phase: 'code_generation_failed',
+          workflowResult: {
+            initialResponse: initialResponse,
+            response: executorAnalysis,
+            error: codeError.message || 'Neuspješna komunikacija s Code agentom',
+            agents: ['Executor', 'Planner']
+          },
+          originalPrompt
+        };
+      }
+
+      generatedCode = codeBlocks.code;
+      generatedLanguage = codeBlocks.language;
+
+      if (!generatedCode) {
+          console.log('Workflow - Korak 2 Result: Ni Code agent nije vratio kod. Završavam workflow.');
+          return {
+              status: 'completed_no_code',
+              message: 'Čini se da zahtjev nije rezultirao kodom.',
+              phase: 'code_generation_failed',
+              workflowResult: {
+                  initialResponse: initialResponse,
+                  summary: executorAnalysis,
+                  agents: ['Executor', 'Planner']
+              },
+              originalPrompt
+          };
+      }
+      console.log(`Workflow - Korak 2 Result: Kod (${generatedLanguage}) generisan.`);
+    } else {
+        console.log('Workflow - Završavam jer nije potreban kod.');
+        return {
+            status: 'completed_no_code',
+            message: 'Zahtjev ne zahtijeva generisanje koda.',
+            phase: 'intent_analysis',
+            workflowResult: {
+                initialResponse: initialResponse,
+                summary: executorAnalysis,
+                agents: ['Executor', 'Planner']
+            },
+            originalPrompt
+        };
     }
-    
-    // Sačuvaj originalni prompt za kasnije rerun-ove
-    const originalPrompt = message;
-    
-    // Provjeri tip odgovora - ako nije code, vrati direktno
-    if (codeResult.type && codeResult.type !== 'code') {
-      return { 
-        status: 'completed', 
-        message: 'Uspješno generisan odgovor', 
-        phase: 'text_response',
-        codeResult: codeResult,
-        originalPrompt,
-        type: codeResult.type 
-      };
-    }
-    
-    // Ekstrahiraj odvojene blokove koda (HTML, CSS, JavaScript)
-    const extractedBlocks = extractCodeBlocks(codeResult.response);
-    
-    if (!extractedBlocks.htmlCode && !extractedBlocks.originalCode) {
-      return { 
-        status: 'completed', 
-        message: 'Kod nije pronađen u odgovoru, ali vraćam rezultat', 
-        phase: 'code_generation',
-        result: codeResult,
-        originalPrompt 
-      };
-    }
-    
-    // Odredi primarni kod za izvršavanje i jezik
-    let primaryCode = extractedBlocks.htmlCode || extractedBlocks.originalCode;
-    
-    // Detektiraj jezik na osnovu sadržaja ako nije eksplicitno naveden
-    let language = extractedBlocks.language || detectLanguage(primaryCode);
-    
-    // Ako imamo HTML kod i još neki drugi resurs, koristimo HTML za izvršavanje
-    if (extractedBlocks.htmlCode && (extractedBlocks.cssCode || extractedBlocks.jsCode)) {
-      // Pripremi kompletan HTML kod s ugrađenim CSS-om i JavaScript-om
-      primaryCode = prepareFullHtmlCode(extractedBlocks.htmlCode, extractedBlocks.cssCode, extractedBlocks.jsCode);
-      language = 'html';
-    }
-    
-    // Korak 2: Izvršavanje koda
-    console.log(`Izvršavanje koda (${language})...`);
+
+    // Korak 3: Izvršavanje koda (koristi generisani kod)
+    console.log(`Workflow - Korak 3: Izvršavanje koda (${generatedLanguage})...`);
     const executionResult = await executeCode(
-      primaryCode, 
-      language, 
-      'script', 
-      null, 
-      { 
+      generatedCode,
+      generatedLanguage,
+      'script',
+      currentSessionId,
+      {
         autoDebug: workflowType !== 'no_debug',
         mcpServer
       }
     );
-    
-    // Korak 3: Ako je bilo grešaka i izvršen je debug, pokušaj ponovo izvršiti kod
+
+    // Korak 4: Ako je bilo grešaka i izvršen je debug, pokušaj ponovo izvršiti kod
+    let fixedResult = null;
+    let fixedCode = null;
     if (executionResult.error && executionResult.debugResult) {
-      console.log('Pokušavam izvršiti ispravljeni kod nakon debugiranja...');
-      
-      // Ekstrahiraj ponovo sve blokove iz debug rezultata
+      console.log('Workflow - Korak 4: Pokušavam izvršiti ispravljeni kod nakon debugiranja...');
+
       const fixedBlocks = extractCodeBlocks(executionResult.debugResult);
-      let fixedCode = fixedBlocks.htmlCode || fixedBlocks.originalCode;
-      
-      // Ako imamo HTML i druge resurse, pripremi kompletan kod
-      if (fixedBlocks.htmlCode && (fixedBlocks.cssCode || fixedBlocks.jsCode)) {
-        fixedCode = prepareFullHtmlCode(fixedBlocks.htmlCode, fixedBlocks.cssCode, fixedBlocks.jsCode);
-      }
-      
+      fixedCode = fixedBlocks.code;
+      const fixedLanguage = fixedBlocks.language || generatedLanguage;
+
       if (fixedCode) {
         console.log('Izvršavanje ispravljenog koda...');
-        
-        // Izvršavanje ispravljenog koda
-        const fixedResult = await executeCode(
-          fixedCode, 
-          language, 
-          'script', 
-          null, 
+        fixedResult = await executeCode(
+          fixedCode,
+          fixedLanguage,
+          'script',
+          currentSessionId,
           { autoDebug: false, mcpServer }
         );
-        
-        return {
-          status: 'completed',
-          message: 'Workflow završen s debugiranjem',
-          phase: 'execution_fixed',
-          codeResult,
-          executionResult,
-          fixedResult,
-          code: {
-            original: primaryCode,
-            fixed: fixedCode,
-            language,
-            css: extractedBlocks.cssCode || fixedBlocks.cssCode,
-            js: extractedBlocks.jsCode || fixedBlocks.jsCode
-          },
-          originalPrompt,
-          mcpServer
-        };
+        console.log('Workflow - Korak 4 Result: Izvršavanje ispravljenog koda završeno.');
+      } else {
+        console.log('Workflow - Korak 4 Result: Nije pronađen ispravljeni kod u debug odgovoru.');
       }
     }
-    
-    // Vrati rezultate svih faza
+
+    // Korak 5: Vrati finalni rezultat workflowa
+    console.log('Workflow - Korak 5: Sastavljanje finalnog rezultata.');
     return {
       status: 'completed',
-      message: 'Workflow završen',
-      phase: executionResult.error ? 'execution_error' : 'execution_success',
-      codeResult,
-      executionResult,
-      code: {
-        original: primaryCode,
-        language,
-        css: extractedBlocks.cssCode,
-        js: extractedBlocks.jsCode
+      message: fixedResult ? 'Workflow završen s debugiranjem' : 'Workflow završen',
+      phase: fixedResult ? 'execution_fixed' : 'execution',
+      workflowResult: {
+          initialResponse: initialResponse,
+          executorAnalysis: executorAnalysis,
+          codeAgentResponse: codeAgentResponse ? codeAgentResponse.response : null,
+          code: {
+              original: generatedCode,
+              fixed: fixedCode,
+              language: generatedLanguage,
+              css: codeBlocks.cssCode,
+              js: codeBlocks.jsCode
+          },
+          executionResult: executionResult,
+          fixedResult: fixedResult,
+          agents: ['Executor', 'Planner', ...(requiresCode ? ['Code'] : []), 'Executor(Code)', ...(executionResult.wasDebugAttempted ? ['Debugger'] : []), ...(fixedResult ? ['Executor(FixedCode)'] : [])],
+          type: 'code'
       },
       originalPrompt,
       mcpServer
     };
   } catch (error) {
-    console.error('Error in workflow execution:', error);
+    console.error('Greška tokom nastavka izvršavanja workflow-a:', error);
     return {
       status: 'error',
       message: `Greška tijekom izvršavanja workflow-a: ${error.message}`,
-      error
+      phase: 'error',
+      workflowResult: {
+        error: error.message,
+        initialResponse: initialResponse || "Došlo je do greške u izvršavanju workflow-a."
+      }
     };
   }
 };
 
-// Pomoćna funkcija za ekstrahiranje HTML, CSS i JavaScript blokova iz odgovora
-function extractCodeBlocks(response) {
-  if (!response) return { originalCode: '', language: 'text' };
-  
-  // Pronađi sve code blokove u sadržaju
-  const htmlBlockRegex = /```(?:html|markup)\n([\s\S]*?)\n```/i;
-  const cssBlockRegex = /```(?:css)\n([\s\S]*?)\n```/i;
-  const jsBlockRegex = /```(?:javascript|js)\n([\s\S]*?)\n```/i;
-  const generalBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/i;
-  
-  let htmlMatch = response.match(htmlBlockRegex);
-  let cssMatch = response.match(cssBlockRegex);
-  let jsMatch = response.match(jsBlockRegex);
-  let generalMatch = response.match(generalBlockRegex);
-  
-  let result = {
-    htmlCode: htmlMatch ? htmlMatch[1].trim() : '',
-    cssCode: cssMatch ? cssMatch[1].trim() : '',
-    jsCode: jsMatch ? jsMatch[1].trim() : '',
-    originalCode: generalMatch ? generalMatch[2] : '',
-    language: generalMatch ? (generalMatch[1] || 'text') : 'text'
-  };
-  
-  // Ako nemamo HTML, ali imamo originalni kod koji izgleda kao HTML
-  if (!result.htmlCode && 
-      (/<html|<!DOCTYPE html|<body|<head|<div|<span|<p|<a/i.test(result.originalCode) || 
-       result.language === 'html' || result.language === 'markup')) {
-    result.htmlCode = result.originalCode;
-    result.language = 'html';
-  }
-  
-  // Pokušaj pronaći CSS i JS unutar style i script tagova u HTML kodu (ako postoji)
-  if (result.htmlCode && !result.cssCode) {
-    const styleTagRegex = /<style>([\s\S]*?)<\/style>/i;
-    const styleMatch = result.htmlCode.match(styleTagRegex);
-    if (styleMatch && styleMatch[1]) {
-      result.cssCode = styleMatch[1].trim();
+// Pomoćna funkcija za ekstrakciju koda - **VAŽNO**: Prebaciti u poseban util fajl?
+function extractCodeBlocks(content) {
+    if (!content) return { code: null, language: 'text', htmlCode: null, cssCode: null, jsCode: null };
+
+    let htmlCode = null;
+    let cssCode = null;
+    let jsCode = null;
+    let originalCode = null; // Za ne-HTML kod
+    let language = 'text';
+
+    // Prioritet za HTML blokove
+    const htmlBlockRegex = /```(?:html|markup)\n([\s\S]*?)\n```/gi;
+    htmlBlockRegex.lastIndex = 0;
+    let match = htmlBlockRegex.exec(content);
+    if (match && match[1]) {
+        htmlCode = match[1].trim();
+        language = 'markup';
     }
-  }
-  
-  if (result.htmlCode && !result.jsCode) {
-    const scriptTagRegex = /<script>([\s\S]*?)<\/script>/i;
-    const scriptMatch = result.htmlCode.match(scriptTagRegex);
-    if (scriptMatch && scriptMatch[1]) {
-      result.jsCode = scriptMatch[1].trim();
+
+    // CSS blokovi
+    const cssBlockRegex = /```(?:css)\n([\s\S]*?)\n```/gi;
+    cssBlockRegex.lastIndex = 0;
+    match = cssBlockRegex.exec(content);
+    if (match && match[1]) {
+        cssCode = match[1].trim();
+        if (!htmlCode) language = 'css'; // Ako nema HTML-a, CSS može biti primarni
     }
-  }
-  
-  return result;
+
+    // JS blokovi
+    const jsBlockRegex = /```(?:javascript|js)\n([\s\S]*?)\n```/gi;
+    jsBlockRegex.lastIndex = 0;
+    match = jsBlockRegex.exec(content);
+    if (match && match[1]) {
+        jsCode = match[1].trim();
+        if (!htmlCode && !cssCode) language = 'javascript'; // Ako nema HTML/CSS, JS može biti primarni
+    }
+
+    // Ako nema specifičnih blokova, traži generički kod blok
+    if (!htmlCode && !cssCode && !jsCode) {
+        const genericBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/i;
+        genericBlockRegex.lastIndex = 0;
+        match = genericBlockRegex.exec(content);
+        if (match && match[2]) {
+            originalCode = match[2].trim();
+            language = match[1].trim() || 'text';
+            if (language === 'js') language = 'javascript';
+            if (language === 'py') language = 'python';
+        }
+    }
+
+    // Ako i dalje nema koda, a sadržaj liči na HTML van blokova
+    if (!htmlCode && !originalCode && /<\/?[a-z][\s\S]*>/i.test(content)) {
+       const containsBlock = /```[a-z]*\n/i.test(content);
+       if (!containsBlock) { // Samo ako nema drugih blokova
+           htmlCode = content;
+           language = 'markup';
+           // Pokušaj izvući inline CSS/JS
+           const styleTagRegex = /<style>([\s\S]*?)<\/style>/gi;
+           styleTagRegex.lastIndex = 0;
+           match = styleTagRegex.exec(htmlCode);
+           if (match && match[1]) cssCode = match[1].trim();
+
+           const scriptTagRegex = /<script>([\s\S]*?)<\/script>/gi;
+           scriptTagRegex.lastIndex = 0;
+           match = scriptTagRegex.exec(htmlCode);
+           if (match && match[1]) jsCode = match[1].trim();
+       }
+    }
+
+    // Ako NEMA koda ni u kom obliku
+    if (!htmlCode && !originalCode && !cssCode && !jsCode) {
+      originalCode = content; // Vrati originalni tekst ako nema koda
+      language = 'text';
+    }
+
+
+    return {
+        code: htmlCode || originalCode, // Primarni kod za izvršavanje
+        language: language,
+        htmlCode: htmlCode,
+        cssCode: cssCode,
+        jsCode: jsCode,
+        originalCode: originalCode // Vraća samo ako nije HTML
+    };
 }
 
-// Pomoćna funkcija za pripremu kompletnog HTML koda s ugrađenim CSS-om i JavaScript-om
+// Pomoćna funkcija za spajanje HTML, CSS, JS - **VAŽNO**: Prebaciti u util?
 function prepareFullHtmlCode(html, css, js) {
-  // Provjeri da li je HTML kompletan dokument
-  const isCompleteHtml = /<html|<!DOCTYPE html/i.test(html);
-  
-  if (isCompleteHtml) {
-    // Ako je kompletan HTML, provjeri da li već sadrži style i script
-    let htmlWithResources = html;
-    
-    // Dodaj CSS ako ga HTML već ne sadrži
-    if (css && !htmlWithResources.includes(`<style>${css}</style>`)) {
-      // Ako postoji </head> tag, dodaj CSS prije njega
-      if (htmlWithResources.includes('</head>')) {
-        htmlWithResources = htmlWithResources.replace('</head>', `<style>${css}</style></head>`);
-      } 
-      // Inače, dodaj na početak body ili na kraj html-a
-      else if (htmlWithResources.includes('<body>')) {
-        htmlWithResources = htmlWithResources.replace('<body>', `<body><style>${css}</style>`);
-      } else {
-        htmlWithResources = `${htmlWithResources}<style>${css}</style>`;
+   if (!html) return ''; // Vrati prazno ako nema HTML-a
+
+    const isCompleteHtml = /<html|<!DOCTYPE html/i.test(html);
+
+    if (isCompleteHtml) {
+      let htmlWithResources = html;
+      if (css && !htmlWithResources.includes(`<style>${css}</style>`)) {
+        if (htmlWithResources.includes('</head>')) {
+          htmlWithResources = htmlWithResources.replace('</head>', `\n<style>\n${css}\n</style>\n</head>`);
+        } else {
+          // Dodaj head ako ne postoji?
+          htmlWithResources = htmlWithResources.replace('<body', '<head>\n<style>\n${css}\n</style>\n</head>\n<body');
+        }
       }
-    }
-    
-    // Dodaj JavaScript ako ga HTML već ne sadrži
-    if (js && !htmlWithResources.includes(`<script>${js}</script>`)) {
-      // Ako postoji </body> tag, dodaj JavaScript prije njega
-      if (htmlWithResources.includes('</body>')) {
-        htmlWithResources = htmlWithResources.replace('</body>', `<script>${js}</script></body>`);
-      } 
-      // Inače, dodaj na kraj html-a
-      else {
-        htmlWithResources = `${htmlWithResources}<script>${js}</script>`;
+      if (js && !htmlWithResources.includes(`<script>${js}</script>`)) {
+        if (htmlWithResources.includes('</body>')) {
+          htmlWithResources = htmlWithResources.replace('</body>', `\n<script>\n${js}\n</script>\n</body>`);
+        } else {
+          htmlWithResources += `\n<script>\n${js}\n</script>`;
+        }
       }
-    }
-    
-    return htmlWithResources;
-  } else {
-    // Ako nije kompletan HTML, kreiraj osnovnu strukturu
-    return `<!DOCTYPE html>
+      return htmlWithResources;
+    } else {
+      // Kreiraj osnovnu strukturu ako je samo fragment
+      return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>To-Do Aplikacija</title>
-  ${css ? `<style>${css}</style>` : ''}
+  <title>Generated Preview</title>
+  ${css ? `<style>\n${css}\n</style>` : ''}
 </head>
 <body>
   ${html}
-  ${js ? `<script>${js}</script>` : ''}
+  ${js ? `\n<script>\n${js}\n</script>` : ''}
 </body>
 </html>`;
-  }
+    }
+}
+
+// Pomoćna funkcija za detekciju jezika - **VAŽNO**: Prebaciti u util?
+function detectLanguage(code) {
+    if (!code) return 'text';
+    if (/^(def|class|import|from|if|for|while)\s+.+:/m.test(code)) return 'python';
+    if (/^(const|let|var|function|class|import)\s+.+/m.test(code)) return 'javascript';
+    if (/<\/?[a-z][\s\S]*>/i.test(code)) return 'markup';
+    if (/\s*\{\s*[\s\S]*?\s*\}/m.test(code)) return 'css';
+    if (/SELECT|FROM|WHERE|INSERT|UPDATE|DELETE/i.test(code)) return 'sql';
+    if (/^[$#>].*$/m.test(code)) return 'bash';
+    return 'text';
 }
 
 // Resetuje trenutnu sesiju
@@ -415,28 +612,3 @@ export const getSessionDetails = async (sessionId) => {
     throw error;
   }
 };
-
-// Funkcija za detekciju jezika koda na osnovu sadržaja
-function detectLanguage(code) {
-  if (!code) return 'text';
-  
-  // Detektiraj jezik na osnovu sintakse
-  if (/<html|<!DOCTYPE html|<body|<head|<div|<span|<p|<a/i.test(code)) {
-    return 'html';
-  }
-  
-  if (/def\s+\w+\s*\(|import\s+\w+|from\s+\w+\s+import|if\s+__name__\s*==\s*('|")__main__\1:|class\s+\w+/i.test(code)) {
-    return 'python';
-  }
-  
-  if (/function\s+\w+\s*\(|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|document\.|window\.|console\.|new Promise/i.test(code)) {
-    return 'javascript';
-  }
-  
-  if (/\{\s*[\w-]+\s*:\s*[^;]+;\s*\}|@media|@keyframes|#[\w-]+\s*\{/i.test(code)) {
-    return 'css';
-  }
-  
-  // Default
-  return 'text';
-}
