@@ -102,7 +102,7 @@ Formatiranje: Koristi Markdown za bolje formatiranje kada je to potrebno.
         # Pretvaraj response_text u zgodan output format za frontend
         result = {
             "response": response_text,
-            "tokens_used": len(response_text.split()) * 1.3,  # Gruba procjena broja tokena
+            "tokens_used": client.tokenizer.tokenize(response_text),  # Precizno brojanje tokena pomoću tokenizer metode
             "model_used": "Claude-3 Opus" if mcp_server == "anthropic" else model,
             "time": time.time()
         }
