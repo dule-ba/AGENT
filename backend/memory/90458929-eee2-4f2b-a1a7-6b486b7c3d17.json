@@ -1,0 +1,155 @@
+{
+  "messages": [
+    {
+      "agent": "executor",
+      "message": "super ali nema za edit i ne svidja mi se stil ",
+      "response": {
+        "response": "Razumem, hajde da prilagodimo stil i strukturu koda da bi bio čistiji i lakši za čitanje. Takođe ćemo dodati provere za unos kako bi se izbegle greške.\n\n```python\ndef calculate(operation, first_number, second_number):\n    if not (isinstance(first_number, (int, float)) and isinstance(second_number, (int, float))):\n        return \"Error! Inputs must be numbers.\"\n        \n    if operation == '+':\n        return first_number + second_number\n    elif operation == '-':\n        return first_number - second_number\n    elif operation == '*':\n        return first_number * second_number\n    elif operation == '/':\n        if second_number != 0:\n            return first_number / second_number\n        else:\n            return 'Error! Division by zero.'\n    else:\n        return \"Error! Invalid operation.\"\n\nprint(calculate('+', 1, 2))  # Outputs: 3\nprint(calculate('-', 5, 3))  # Outputs: 2\nprint(calculate('*', 2, 3))  # Outputs: 6\nprint(calculate('/', 10, 2))  # Outputs: 5.0\nprint(calculate('/', 10, 0))  # Outputs: Error! Division by zero.\n```\n\nOvaj stil koda je čistiji i lakši za čitanje. Svaka operacija se sada izvodi u svom bloku `elif`, a greške se odmah vraćaju umesto da se čuva rezultat za kasnije. Takođe, dodao sam proveru na početku da se osiguram da su ulazne vrednosti brojevi.",
+        "error": "Error code: 404 - {'error': {'message': 'The model `default` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "time": 1744159664.2771711,
+        "executor_response": "Došlo je do greške pri obradi vašeg upita. Molimo pokušajte ponovno. (Greška: Error code: 404 - {'error': {'message': 'The model `default` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}})",
+        "flow": [
+          "Executor",
+          "Debugger"
+        ],
+        "agents": [
+          "Executor preusmjeren na Debugger agenta",
+          "Razumem, hajde da prilagodimo stil i strukturu koda da bi bio čistiji i lakši za čitanje. Takođe ćemo dodati provere za unos kako bi se izbegle greške.\n\n```python\ndef calculate(operation, first_number, second_number):\n    if not (isinstance(first_number, (int, float)) and isinstance(second_number, (int, float))):\n        return \"Error! Inputs must be numbers.\"\n        \n    if operation == '+':\n        return first_number + second_number\n    elif operation == '-':\n        return first_number - second_number\n    elif operation == '*':\n        return first_number * second_number\n    elif operation == '/':\n        if second_number != 0:\n            return first_number / second_number\n        else:\n            return 'Error! Division by zero.'\n    else:\n        return \"Error! Invalid operation.\"\n\nprint(calculate('+', 1, 2))  # Outputs: 3\nprint(calculate('-', 5, 3))  # Outputs: 2\nprint(calculate('*', 2, 3))  # Outputs: 6\nprint(calculate('/', 10, 2))  # Outputs: 5.0\nprint(calculate('/', 10, 0))  # Outputs: Error! Division by zero.\n```\n\nOvaj stil koda je čistiji i lakši za čitanje. Svaka operacija se sada izvodi u svom bloku `elif`, a greške se odmah vraćaju umesto da se čuva rezultat za kasnije. Takođe, dodao sam proveru na početku da se osiguram da su ulazne vrednosti brojevi."
+        ],
+        "token_count": 354,
+        "session_id": "90458929-eee2-4f2b-a1a7-6b486b7c3d17"
+      },
+      "timestamp": "2025-04-09T02:47:55.762773"
+    },
+    {
+      "agent": "executor",
+      "message": "mislio sam na todo aplokaciju a ne na calculator",
+      "response": {
+        "response": "Izvinjavam se na nesporazumu. Da biste kreirali jednostavnu \"todo\" aplikaciju, možete koristiti sledeći kod:\n\n```python\nimport tkinter as tk\n\ndef add_task():\n    task = task_entry.get()\n    if task != \"\":\n        task_list.insert(tk.END, task)\n    task_entry.delete(0, tk.END)\n\ndef delete_task():\n    try:\n        task_index = task_list.curselection()[0]\n        task_list.delete(task_index)\n    except:\n        pass\n\nwindow = tk.Tk()\nwindow.title(\"Todo App\")\n\ntask_entry = tk.Entry(window)\ntask_entry.pack()\n\nadd_button = tk.Button(window, text=\"Add Task\", command=add_task)\nadd_button.pack()\n\ndelete_button = tk.Button(window, text=\"Delete Task\", command=delete_task)\ndelete_button.pack()\n\ntask_list = tk.Listbox(window)\ntask_list.pack()\n\nwindow.mainloop()\n```\n\nOvaj kod kreira jednostavnu \"todo\" aplikaciju sa GUI koristeći Tkinter. Korisnik može uneti zadatak u polje za unos, a zatim kliknuti na dugme \"Add Task\" da bi dodao zadatak u listu. Takođe, korisnik može izabrati zadatak iz liste i kliknuti na dugme \"Delete Task\" da bi uklonio zadatak iz liste.\n\nAko se javljaju greške prilikom izvršavanja ovog koda, slobodno ih podelite ovde kako bih mogao da pomognem sa ispravkama.",
+        "error": "Error code: 404 - {'error': {'message': 'The model `default` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "time": 1744159711.494741,
+        "executor_response": "Došlo je do greške pri obradi vašeg upita. Molimo pokušajte ponovno. (Greška: Error code: 404 - {'error': {'message': 'The model `default` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}})",
+        "flow": [
+          "Executor",
+          "Debugger"
+        ],
+        "agents": [
+          "Executor preusmjeren na Debugger agenta",
+          "Izvinjavam se na nesporazumu. Da biste kreirali jednostavnu \"todo\" aplikaciju, možete koristiti sledeći kod:\n\n```python\nimport tkinter as tk\n\ndef add_task():\n    task = task_entry.get()\n    if task != \"\":\n        task_list.insert(tk.END, task)\n    task_entry.delete(0, tk.END)\n\ndef delete_task():\n    try:\n        task_index = task_list.curselection()[0]\n        task_list.delete(task_index)\n    except:\n        pass\n\nwindow = tk.Tk()\nwindow.title(\"Todo App\")\n\ntask_entry = tk.Entry(window)\ntask_entry.pack()\n\nadd_button = tk.Button(window, text=\"Add Task\", command=add_task)\nadd_button.pack()\n\ndelete_button = tk.Button(window, text=\"Delete Task\", command=delete_task)\ndelete_button.pack()\n\ntask_list = tk.Listbox(window)\ntask_list.pack()\n\nwindow.mainloop()\n```\n\nOvaj kod kreira jednostavnu \"todo\" aplikaciju sa GUI koristeći Tkinter. Korisnik može uneti zadatak u polje za unos, a zatim kliknuti na dugme \"Add Task\" da bi dodao zadatak u listu. Takođe, korisnik može izabrati zadatak iz liste i kliknuti na dugme \"Delete Task\" da bi uklonio zadatak iz liste.\n\nAko se javljaju greške prilikom izvršavanja ovog koda, slobodno ih podelite ovde kako bih mogao da pomognem sa ispravkama."
+        ],
+        "token_count": 317,
+        "session_id": "90458929-eee2-4f2b-a1a7-6b486b7c3d17"
+      },
+      "timestamp": "2025-04-09T02:48:49.254759"
+    },
+    {
+      "agent": "debugger",
+      "message": "Debug ovaj kod i ispravi sve greške: \n```python\nimport tkinter as tk\n\ndef add_task():\n    task = task_entry.get()\n    if task != \"\":\n        task_list.insert(tk.END, task)\n    task_entry.delete(0, tk.END)\n\ndef delete_task():\n    try:\n        task_index = task_list.curselection()[0]\n        task_list.delete(task_index)\n    except:\n        pass\n\nwindow = tk.Tk()\nwindow.title(\"Todo App\")\n\ntask_entry = tk.Entry(window)\ntask_entry.pack()\n\nadd_button = tk.Button(window, text=\"Add Task\", command=add_task)\nadd_button.pack()\n\ndelete_button = tk.Button(window, text=\"Delete Task\", command=delete_task)\ndelete_button.pack()\n\ntask_list = tk.Listbox(window)\ntask_list.pack()\n\nwindow.mainloop()\n```\n\nGREŠKA:\nIzvršavanje koda je prekoračilo vremensko ograničenje (10 sekundi)",
+      "response": {
+        "response": "Kod koji ste naveli je ispravan i ne sadrži greške. Međutim, problem je što je ovaj kod dizajniran za pokretanje grafičkog korisničkog interfejsa (GUI) pomoću Tkinter biblioteke. Kada se ovaj kod pokrene, otvara se prozor i čeka korisnički unos, što može trajati neodređeno vreme.\n\nIzvršavanje ovog koda u okruženju koje ima vremensko ograničenje za izvršavanje koda (kao što je online IDE ili neka vrsta automatizovanog testiranja) može dovesti do prekoračenja vremenskog ograničenja, jer kod čeka korisnički unos i neće se završiti dok korisnik ne zatvori prozor.\n\nDa biste rešili ovaj problem, trebali biste da pokrenete ovaj kod lokalno na svom računaru, a ne u okruženju koje ima vremensko ograničenje za izvršavanje koda. Ako morate da pokrenete ovaj kod u okruženju sa vremenskim ograničenjem, možda ćete morati da prilagodite kod tako da ne čeka korisnički unos i da se automatski završava nakon određenog vremena.",
+        "token_count": 260,
+        "session_id": "90458929-eee2-4f2b-a1a7-6b486b7c3d17"
+      },
+      "timestamp": "2025-04-09T02:49:14.146947"
+    },
+    {
+      "agent": "code",
+      "message": "mislio sam na todo aplokaciju a ne na calculator",
+      "response": {
+        "response": "Naravno, mogu vam pomoći da kreirate osnovnu To-Do aplikaciju. Ovde je jednostavan primer kako biste mogli to uraditi koristeći Python i njegovu biblioteku Flask.\n\n```python\nfrom flask import Flask, render_template, request, redirect, url_for\napp = Flask(__name__)\n\ntodos = []\n\n@app.route('/')\ndef home():\n    return render_template('home.html', todos=todos)\n\n@app.route('/add', methods=['POST'])\ndef add():\n    todo = request.form.get('todo')\n    todos.append(todo)\n    return redirect(url_for('home'))\n\n@app.route('/delete', methods=['POST'])\ndef delete():\n    todo = request.form.get('todo')\n    todos.remove(todo)\n    return redirect(url_for('home'))\n\nif __name__ == '__main__':\n    app.run(debug=True)\n```\n\nOvaj kod kreira jednostavnu web aplikaciju sa Flask-om. Lista `todos` čuva sve zadatke. Postoje dve rute, jedna za dodavanje novih zadataka i druga za brisanje postojećih.\n\nTakođe, trebaće vam HTML datoteke za prikazivanje zadatka. Na primer, `home.html` može izgledati ovako:\n\n```html\n<!DOCTYPE html>\n<html>\n<body>\n<h1>Todo List</h1>\n<form action=\"/add\" method=\"post\">\n    <input type=\"text\" name=\"todo\" required>\n    <input type=\"submit\" value=\"Add\">\n</form>\n<ul>\n    {% for todo in todos %}\n    <li>\n        {{ todo }}\n        <form action=\"/delete\" method=\"post\" style=\"display: inline;\">\n            <input type=\"hidden\" name=\"todo\" value=\"{{ todo }}\">\n            <input type=\"submit\" value=\"Delete\">\n        </form>\n    </li>\n    {% endfor %}\n</ul>\n</body>\n</html>\n```\n\nOva HTML datoteka prikazuje formu za dodavanje novih zadataka i listu svih postojećih zadataka sa dugmetom za brisanje svakog zadatka.\n\nImajte na umu da ovo nije kompletna To-Do aplikacija. Ovo je samo osnovni okvir koji možete proširiti prema svojim potrebama.",
+        "token_count": 464,
+        "session_id": "90458929-eee2-4f2b-a1a7-6b486b7c3d17"
+      },
+      "timestamp": "2025-04-09T02:49:54.536326"
+    },
+    {
+      "agent": "executor",
+      "message": "napravi mi todo aplikaciju ",
+      "response": {
+        "response": "Evo jednostavne Todo aplikacije koja koristi Tkinter za GUI:\n\n```python\nimport tkinter as tk\n\nclass TodoApp:\n    def __init__(self, master):\n        self.master = master\n        self.master.title(\"Todo App\")\n\n        self.task_entry = tk.Entry(self.master)\n        self.task_entry.pack()\n\n        self.add_button = tk.Button(self.master, text=\"Add Task\", command=self.add_task)\n        self.add_button.pack()\n\n        self.delete_button = tk.Button(self.master, text=\"Delete Task\", command=self.delete_task)\n        self.delete_button.pack()\n\n        self.task_list = tk.Listbox(self.master)\n        self.task_list.pack()\n\n    def add_task(self):\n        task = self.task_entry.get()\n        if task != \"\":\n            self.task_list.insert(tk.END, task)\n        self.task_entry.delete(0, tk.END)\n\n    def delete_task(self):\n        try:\n            task_index = self.task_list.curselection()[0]\n            self.task_list.delete(task_index)\n        except:\n            pass\n\nif __name__ == \"__main__\":\n    root = tk.Tk()\n    todo_app = TodoApp(root)\n    root.mainloop()\n```\n\nOva aplikacija ima polje za unos (Entry) za unos zadatka, dugme za dodavanje zadatka (Add Task) i dugme za brisanje zadatka (Delete Task). Kada se unese zadatak i klikne na dugme \"Add Task\", zadatak se dodaje u Listbox. Kada se izabere zadatak iz Listbox-a i klikne na dugme \"Delete Task\", izabrani zadatak se briše.",
+        "error": "Error code: 404 - {'error': {'message': 'The model `default` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "time": 1744161623.3188007,
+        "executor_response": "Došlo je do greške pri obradi vašeg upita. Molimo pokušajte ponovno. (Greška: Error code: 404 - {'error': {'message': 'The model `default` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}})",
+        "flow": [
+          "Executor",
+          "Debugger"
+        ],
+        "agents": [
+          "Executor preusmjeren na Debugger agenta",
+          "Evo jednostavne Todo aplikacije koja koristi Tkinter za GUI:\n\n```python\nimport tkinter as tk\n\nclass TodoApp:\n    def __init__(self, master):\n        self.master = master\n        self.master.title(\"Todo App\")\n\n        self.task_entry = tk.Entry(self.master)\n        self.task_entry.pack()\n\n        self.add_button = tk.Button(self.master, text=\"Add Task\", command=self.add_task)\n        self.add_button.pack()\n\n        self.delete_button = tk.Button(self.master, text=\"Delete Task\", command=self.delete_task)\n        self.delete_button.pack()\n\n        self.task_list = tk.Listbox(self.master)\n        self.task_list.pack()\n\n    def add_task(self):\n        task = self.task_entry.get()\n        if task != \"\":\n            self.task_list.insert(tk.END, task)\n        self.task_entry.delete(0, tk.END)\n\n    def delete_task(self):\n        try:\n            task_index = self.task_list.curselection()[0]\n            self.task_list.delete(task_index)\n        except:\n            pass\n\nif __name__ == \"__main__\":\n    root = tk.Tk()\n    todo_app = TodoApp(root)\n    root.mainloop()\n```\n\nOva aplikacija ima polje za unos (Entry) za unos zadatka, dugme za dodavanje zadatka (Add Task) i dugme za brisanje zadatka (Delete Task). Kada se unese zadatak i klikne na dugme \"Add Task\", zadatak se dodaje u Listbox. Kada se izabere zadatak iz Listbox-a i klikne na dugme \"Delete Task\", izabrani zadatak se briše."
+        ],
+        "token_count": 339,
+        "session_id": "90458929-eee2-4f2b-a1a7-6b486b7c3d17"
+      },
+      "timestamp": "2025-04-09T03:20:36.920590"
+    },
+    {
+      "agent": "debugger",
+      "message": "Debug ovaj kod i ispravi sve greške: \n```python\nimport tkinter as tk\n\nclass TodoApp:\n    def __init__(self, master):\n        self.master = master\n        self.master.title(\"Todo App\")\n\n        self.task_entry = tk.Entry(self.master)\n        self.task_entry.pack()\n\n        self.add_button = tk.Button(self.master, text=\"Add Task\", command=self.add_task)\n        self.add_button.pack()\n\n        self.delete_button = tk.Button(self.master, text=\"Delete Task\", command=self.delete_task)\n        self.delete_button.pack()\n\n        self.task_list = tk.Listbox(self.master)\n        self.task_list.pack()\n\n    def add_task(self):\n        task = self.task_entry.get()\n        if task != \"\":\n            self.task_list.insert(tk.END, task)\n        self.task_entry.delete(0, tk.END)\n\n    def delete_task(self):\n        try:\n            task_index = self.task_list.curselection()[0]\n            self.task_list.delete(task_index)\n        except:\n            pass\n\nif __name__ == \"__main__\":\n    root = tk.Tk()\n    todo_app = TodoApp(root)\n    root.mainloop()\n```\n\nGREŠKA:\nIzvršavanje koda je prekoračilo vremensko ograničenje (10 sekundi)",
+      "response": {
+        "response": "Kao što je ranije objašnjeno, kod koji ste naveli je ispravan i ne sadrži greške. Opet, problem je što je ovaj kod dizajniran za pokretanje grafičkog korisničkog interfejsa (GUI) pomoću Tkinter biblioteke. Kada se ovaj kod pokrene, otvara se prozor i čeka korisnički unos, što može trajati neodređeno vreme.\n\nIzvršavanje ovog koda u okruženju koje ima vremensko ograničenje za izvršavanje koda (kao što je online IDE ili neka vrsta automatizovanog testiranja) može dovesti do prekoračenja vremenskog ograničenja, jer kod čeka korisnički unos i neće se završiti dok korisnik ne zatvori prozor.\n\nDa biste rešili ovaj problem, trebali biste da pokrenete ovaj kod lokalno na svom računaru, a ne u okruženju koje ima vremensko ograničenje za izvršavanje koda. Ako morate da pokrenete ovaj kod u okruženju sa vremenskim ograničenjem, možda ćete morati da prilagodite kod tako da ne čeka korisnički unos i da se automatski završava nakon određenog vremena."
+      },
+      "timestamp": "2025-04-09T03:20:59.555402"
+    },
+    {
+      "agent": "debugger",
+      "message": "Debug ovaj kod i ispravi sve greške: \n```python\nimport tkinter as tk\n\nclass TodoApp:\n    def __init__(self, master):\n        self.master = master\n        self.master.title(\"Todo App\")\n\n        self.task_entry = tk.Entry(self.master)\n        self.task_entry.pack()\n\n        self.add_button = tk.Button(self.master, text=\"Add Task\", command=self.add_task)\n        self.add_button.pack()\n\n        self.delete_button = tk.Button(self.master, text=\"Delete Task\", command=self.delete_task)\n        self.delete_button.pack()\n\n        self.task_list = tk.Listbox(self.master)\n        self.task_list.pack()\n\n    def add_task(self):\n        task = self.task_entry.get()\n        if task != \"\":\n            self.task_list.insert(tk.END, task)\n        self.task_entry.delete(0, tk.END)\n\n    def delete_task(self):\n        try:\n            task_index = self.task_list.curselection()[0]\n            self.task_list.delete(task_index)\n        except:\n            pass\n\nif __name__ == \"__main__\":\n    root = tk.Tk()\n    todo_app = TodoApp(root)\n    root.mainloop()\n```\n\nGREŠKA:\nIzvršavanje koda je prekoračilo vremensko ograničenje (10 sekundi)",
+      "response": {
+        "response": "Kao što je ranije objašnjeno, kod koji ste naveli je ispravan i ne sadrži greške. Opet, problem je što je ovaj kod dizajniran za pokretanje grafičkog korisničkog interfejsa (GUI) pomoću Tkinter biblioteke. Kada se ovaj kod pokrene, otvara se prozor i čeka korisnički unos, što može trajati neodređeno vreme.\n\nIzvršavanje ovog koda u okruženju koje ima vremensko ograničenje za izvršavanje koda (kao što je online IDE ili neka vrsta automatizovanog testiranja) može dovesti do prekoračenja vremenskog ograničenja, jer kod čeka korisnički unos i neće se završiti dok korisnik ne zatvori prozor.\n\nDa biste rešili ovaj problem, trebali biste da pokrenete ovaj kod lokalno na svom računaru, a ne u okruženju koje ima vremensko ograničenje za izvršavanje koda. Ako morate da pokrenete ovaj kod u okruženju sa vremenskim ograničenjem, možda ćete morati da prilagodite kod tako da ne čeka korisnički unos i da se automatski završava nakon određenog vremena."
+      },
+      "timestamp": "2025-04-09T03:23:10.122230"
+    },
+    {
+      "agent": "code",
+      "message": "napravi mi todo aplikaciju ",
+      "response": {
+        "response": "Naravno, evo jednostavnog primjera To-Do aplikacije koristeći JavaScript, HTML i CSS. \n\nHTML kod:\n```html\n<!DOCTYPE html>\n<html>\n<head>\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"styles.css\">\n</head>\n<body>\n    <div id=\"myDIV\" class=\"header\">\n      <h2>My To Do List</h2>\n      <input type=\"text\" id=\"myInput\" placeholder=\"Title...\">\n      <span onclick=\"newElement()\" class=\"addBtn\">Add</span>\n    </div>\n\n    <ul id=\"myUL\">\n    </ul>\n    \n    <script src=\"script.js\"></script>\n</body>\n</html>\n```\n\nJavaScript kod:\n```javascript\n// Create a \"close\" button and append it to each list item\nvar myNodelist = document.getElementsByTagName(\"LI\");\nvar i;\nfor (i = 0; i < myNodelist.length; i++) {\n  var span = document.createElement(\"SPAN\");\n  var txt = document.createTextNode(\"\\u00D7\");\n  span.className = \"close\";\n  span.appendChild(txt);\n  myNodelist[i].appendChild(span);\n}\n\n// Click on a close button to hide the current list item\nvar close = document.getElementsByClassName(\"close\");\nvar i;\nfor (i = 0; i < close.length; i++) {\n  close[i].onclick = function() {\n    var div = this.parentElement;\n    div.style.display = \"none\";\n  }\n}\n\n// Add a \"checked\" symbol when clicking on a list item\nvar list = document.querySelector('ul');\nlist.addEventListener('click', function(ev) {\n  if (ev.target.tagName === 'LI') {\n    ev.target.classList.toggle('checked');\n  }\n}, false);\n\n// Create a new list item when clicking on the \"Add\" button\nfunction newElement() {\n  var li = document.createElement(\"li\");\n  var inputValue = document.getElementById(\"myInput\").value;\n  var t = document.createTextNode(inputValue);\n  li.appendChild(t);\n  if (inputValue === '') {\n    alert(\"You must write something!\");\n  } else {\n    document.getElementById(\"myUL\").appendChild(li);\n  }\n  document.getElementById(\"myInput\").value = \"\";\n\n  var span = document.createElement(\"SPAN\");\n  var txt = document.createTextNode(\"\\u00D7\");\n  span.className = \"close\";\n  span.appendChild(txt);\n  li.appendChild(span);\n\n  for (i = 0; i < close.length; i++) {\n    close[i].onclick = function() {\n      var div = this.parentElement;\n      div.style.display = \"none\";\n    }\n  }\n}\n```\n\nCSS kod:\n```css\n/* Style the header */\n.header {\n  background-color: #f44336;\n  padding: 30px 40px;\n  color: white;\n  text-align: center;\n}\n\n/* Style the input box */\n.input {\n  margin: 0;\n  border: none;\n  border-radius: 0;\n  width: 75%;\n  padding: 10px;\n  float: left;\n  font-size: 16px;\n}\n\n/* Style the \"Add\" button */\n.addBtn {\n  padding: 10px;\n  width: 25%;\n  background: #d9d9d9;\n  color: #555;\n  float: left;\n  text-align: center;\n  font-size: 16px;\n  cursor: pointer;\n  transition: 0.3s;\n  border-radius: 0;\n}\n\n.addBtn:hover {\n  background-color: #bbb;\n}\n```\n\nOva aplikacija omogućava korisniku da unese zadatak, dodaje ga na listu i omogućava korisniku da označi zadatak kao dovršen ili ga izbriše sa liste."
+      },
+      "timestamp": "2025-04-09T03:24:28.144610"
+    },
+    {
+      "agent": "executor",
+      "message": "pozdrav",
+      "response": {
+        "response": "Pozdrav! Kako mogu da vam pomognem danas?",
+        "error": "Error code: 404 - {'error': {'message': 'The model `default` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}}",
+        "time": 1744161941.9137454,
+        "executor_response": "Došlo je do greške pri obradi vašeg upita. Molimo pokušajte ponovno. (Greška: Error code: 404 - {'error': {'message': 'The model `default` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_found'}})",
+        "flow": [
+          "Executor",
+          "Debugger"
+        ],
+        "agents": [
+          "Executor preusmjeren na Debugger agenta",
+          "Pozdrav! Kako mogu da vam pomognem danas?"
+        ]
+      },
+      "timestamp": "2025-04-09T03:25:45.915334"
+    }
+  ],
+  "created_at": "2025-04-09T02:13:27.556664",
+  "agents_used": [
+    "executor"
+  ],
+  "summary": "Razgovor ima 11 poruka. Teme uključuju: debugger, executor, debugger, debugger, debugger...",
+  "agent_flow": [
+    {
+      "agent_type": "debugger",
+      "timestamp": "2025-04-09T03:23:10.122230",
+      "message": "Debug ovaj kod i ispravi sve greške: \n```python\nimport tkinter as tk\n\nclass TodoApp:\n    def __init__(self, master):\n        self.master = master\n        self.master.title(\"Todo App\")\n\n        self.task_entry = tk.Entry(self.master)\n        self.task_entry.pack()\n\n        self.add_button = tk.Button(self.master, text=\"Add Task\", command=self.add_task)\n        self.add_button.pack()\n\n        self.delete_button = tk.Button(self.master, text=\"Delete Task\", command=self.delete_task)\n        self.delete_button.pack()\n\n        self.task_list = tk.Listbox(self.master)\n        self.task_list.pack()\n\n    def add_task(self):\n        task = self.task_entry.get()\n        if task != \"\":\n            self.task_list.insert(tk.END, task)\n        self.task_entry.delete(0, tk.END)\n\n    def delete_task(self):\n        try:\n            task_index = self.task_list.curselection()[0]\n            self.task_list.delete(task_index)\n        except:\n            pass\n\nif __name__ == \"__main__\":\n    root = tk.Tk()\n    todo_app = TodoApp(root)\n    root.mainloop()\n```\n\nGREŠKA:\nIzvršavanje koda je prekoračilo vremensko ograničenje (10 sekundi)",
+      "response_summary": "Kao što je ranije objašnjeno, kod koji ste naveli je ispravan i ne sadrži greške. Opet, problem je što je ovaj kod dizajniran za pokretanje grafičkog korisničkog interfejsa (GUI) pomoću Tkinter biblio"
+    },
+    {
+      "agent_type": "code",
+      "timestamp": "2025-04-09T03:24:28.144610",
+      "message": "napravi mi todo aplikaciju ",
+      "response_summary": "Naravno, evo jednostavnog primjera To-Do aplikacije koristeći JavaScript, HTML i CSS. \n\nHTML kod:\n```html\n<!DOCTYPE html>\n<html>\n<head>\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"styles.css\">\n</"
+    },
+    {
+      "agent_type": "executor",
+      "timestamp": "2025-04-09T03:25:45.915334",
+      "message": "pozdrav",
+      "response_summary": "Pozdrav! Kako mogu da vam pomognem danas?"
+    }
+  ]
+}

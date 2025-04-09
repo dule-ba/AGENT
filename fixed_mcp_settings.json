@@ -1,0 +1,88 @@
+{
+  "mcpServers": {
+    "github.com/modelcontextprotocol/servers/tree/main/src/git": {
+      "command": "python",
+      "args": ["-m", "mcp_server_git", "--repository", "c:/Users/sahov/zezanje_programi"],
+      "env": {
+        "GIT_PYTHON_GIT_EXECUTABLE": "C:\\Program Files\\Git\\bin\\git.exe"
+      },
+      "disabled": false,
+      "autoApprove": []
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\sahov\\AppData\\Roaming\\npm\\node_modules\\@modelcontextprotocol\\server-sequential-thinking\\build\\index.js"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/puppeteer": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/sqlite": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-v",
+        "mcp-test:/mcp",
+        "mcp/sqlite",
+        "--db-path",
+        "/mcp/test.db"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/google-maps": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-google-maps"
+      ],
+      "env": {
+        "GOOGLE_MAPS_API_KEY": "AIzaSyAepVFvxJRSUzKnv3YuO6A93g-08qIg9m0"
+      },
+      "disabled": false,
+      "autoApprove": []
+    },
+    "google-maps-local": {
+      "command": "node",
+      "args": [
+        "C:/Users/sahov/Documents/Cline/MCP/google-maps/server.js"
+      ],
+      "env": {
+        "GOOGLE_MAPS_API_KEY": "AIzaSyAepVFvxJRSUzKnv3YuO6A93g-08qIg9m0"
+      },
+      "disabled": false,
+      "autoApprove": []
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:/Users/sahov/Documents",
+        "c:/Users/sahov/manus-turizam"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "github.com/modelcontextprotocol/servers/tree/main/src/github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "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"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}

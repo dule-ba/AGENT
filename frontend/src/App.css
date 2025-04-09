@@ -1,0 +1,319 @@
+/* AI Agent Platform - Dark Theme */
+
+/* Reset i osnovni stilovi */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Dark Mode theme colors */
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --accent-blue: #3b82f6;
+  --accent-green: #10b981;
+  --accent-purple: #8b5cf6;
+  --card-bg: rgba(30, 41, 59, 0.6);
+  --sidebar-bg: #111827;
+  --input-bg: rgba(30, 41, 59, 0.8);
+  --success: #10b981;
+  --error: #ef4444;
+  --warning: #f59e0b;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Glassmorphism card style */
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* Sidebar styles */
+.sidebar {
+  background-color: var(--sidebar-bg);
+  width: 64px;  /* Narrow sidebar with just icons */
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  z-index: 10;
+  transition: width 0.3s ease;
+}
+
+.sidebar.expanded {
+  width: 240px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-item.active {
+  background-color: var(--accent-blue);
+  color: white;
+}
+
+/* Main app layout */
+.app-container {
+  display: flex;
+  height: 100vh;
+}
+
+.content-area {
+  margin-left: 64px;
+  flex-grow: 1;
+  padding: 20px;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.grid-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 20px;
+  height: calc(100vh - 40px);
+  width: 100%;
+}
+
+.chat-area {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  height: 100%;
+  overflow: hidden;
+}
+
+.flow-area {
+  grid-column: 2;
+  grid-row: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+.workspace-area {
+  grid-column: 2;
+  grid-row: 2;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Input styles */
+.input-field {
+  background-color: var(--input-bg);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 12px;
+  width: 100%;
+  resize: none;
+  transition: border-color 0.2s ease;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+/* Button styles */
+.button {
+  background-color: var(--accent-blue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.button:hover {
+  background-color: #2563eb;
+}
+
+.button.secondary {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.button.secondary:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Stilovi za React Flow komponente */
+.react-flow__node {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: var(--card-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+  stroke: var(--accent-blue);
+}
+
+.react-flow__edge-animated {
+  stroke-dasharray: 5;
+  animation: flow 0.5s infinite linear;
+}
+
+@keyframes flow {
+  from {
+    stroke-dashoffset: 10;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Custom styles for node types */
+.agent-node {
+  padding: 10px;
+  border-radius: 8px;
+  width: 150px;
+  text-align: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.agent-node:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.agent-node.executor {
+  background-color: rgba(59, 130, 246, 0.2);
+  border: 1px solid var(--accent-blue);
+}
+
+.agent-node.planner {
+  background-color: rgba(139, 92, 246, 0.2);
+  border: 1px solid var(--accent-purple);
+}
+
+.agent-node.code {
+  background-color: rgba(16, 185, 129, 0.2);
+  border: 1px solid var(--accent-green);
+}
+
+.agent-node.data {
+  background-color: rgba(245, 158, 11, 0.2);
+  border: 1px solid var(--warning);
+}
+
+/* Stilovi za WorkEnvironment */
+.work-environment .terminal-view {
+  font-family: 'Fira Code', 'Courier New', monospace;
+  background-color: #111827;
+  color: #33ff33;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.work-environment .code-view {
+  font-family: 'Fira Code', 'Courier New', monospace;
+  background-color: #1e293b;
+  color: #e2e8f0;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tab-container {
+  display: flex;
+  margin-bottom: 10px;
+}
+
+.tab {
+  padding: 8px 16px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8px 8px 0 0;
+  margin-right: 2px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.tab.active {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-bottom: 2px solid var (--accent-blue);
+}
+
+/* Responsive styles */
+@media (max-width: 1024px) {
+  .grid-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    height: auto;
+  }
+  
+  .chat-area, .flow-area, .workspace-area {
+    grid-column: 1;
+    height: calc(33vh - 20px);
+    min-height: 300px;
+  }
+  
+  .chat-area {
+    grid-row: 1;
+  }
+  
+  .flow-area {
+    grid-row: 2;
+  }
+  
+  .workspace-area {
+    grid-row: 3;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: 60px;
+    bottom: 0;
+    top: auto;
+    flex-direction: row;
+  }
+  
+  .content-area {
+    margin-left: 0;
+    padding-bottom: 60px;
+  }
+  
+  .sidebar-item {
+    margin-bottom: 0;
+    margin-right: 10px;
+  }
+}

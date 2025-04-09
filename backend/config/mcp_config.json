@@ -1,0 +1,93 @@
+{
+  "mcp_servers": [
+    {
+      "name": "GitHub",
+      "enabled": true,
+      "module": "github_mcp",
+      "config": {
+        "access_token": "YOUR_GITHUB_TOKEN",
+        "repositories": ["AGENT"]
+      }
+    },
+    {
+      "name": "WebSearch",
+      "enabled": false,
+      "module": "websearch_mcp",
+      "config": {
+        "api_key": "YOUR_OPENAI_KEY",
+        "max_results": 5
+      }
+    },
+    {
+      "name": "Pinecone",
+      "enabled": false,
+      "module": "pinecone_mcp",
+      "config": {
+        "api_key": "YOUR_PINECONE_KEY",
+        "environment": "YOUR_ENVIRONMENT",
+        "index_name": "agent-knowledge"
+      }
+    },
+    {
+      "name": "Anthropic",
+      "enabled": true,
+      "module": "anthropic_mcp",
+      "config": {
+        "api_key": "YOUR_ANTHROPIC_API_KEY",
+        "default_model": "claude-3-5-sonnet-20240620",
+        "max_tokens": 4096,
+        "cache_enabled": true,
+        "cache_ttl": 3600
+      }
+    },
+    {
+      "name": "ChatSum",
+      "enabled": false,
+      "module": "chatsum_mcp",
+      "config": {
+        "max_history": 100
+      }
+    },
+    {
+      "name": "Search",
+      "enabled": false,
+      "module": "search_mcp",
+      "config": {
+        "search_paths": ["./"]
+      }
+    },
+    {
+      "name": "Terminal",
+      "enabled": false,
+      "module": "terminal_control_mcp",
+      "config": {
+        "allowed_commands": ["git", "npm", "node", "python", "pip"],
+        "restricted_paths": []
+      }
+    },
+    {
+      "name": "Kagi",
+      "enabled": false,
+      "module": "kagi_mcp",
+      "config": {
+        "api_key": "YOUR_KAGI_API_KEY",
+        "max_results": 3
+      }
+    },
+    {
+      "name": "MultiAgent",
+      "enabled": false,
+      "module": "multi_agent_mcp",
+      "config": {
+        "max_agents": 5,
+        "default_agents": ["executor", "code", "planner"]
+      }
+    }
+  ],
+  "mcp_settings": {
+    "timeout": 30,
+    "log_level": "info",
+    "cache_enabled": true,
+    "cache_expiry": 3600
+  }
+}

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo Aplikacija</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Todo Lista</h1>
+        <div class="input-container">
+            <input type="text" id="todo-input" placeholder="Unesite novi zadatak..." />
+            <button id="add-btn">Dodaj</button>
+        </div>
+        
+        <div class="filters">
+            <button class="filter-btn active" data-filter="all">Sve</button>
+            <button class="filter-btn" data-filter="active">Aktivne</button>
+            <button class="filter-btn" data-filter="completed">Završene</button>
+        </div>
+        
+        <ul id="todo-list"></ul>
+        
+        <div class="clear-container">
+            <button id="clear-completed">Obriši završene</button>
+            <span id="items-left">0 preostalih stavki</span>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
