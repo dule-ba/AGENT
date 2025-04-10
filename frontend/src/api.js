@@ -133,304 +133,183 @@ export const executeCode = async (code, language, mode = 'script', sessionId = n
   }
 };
 
-// API poziv za izvršavanje lanca operacija (code -> execute -> debug -> web preview)
-export const executeWorkflow = async (message, options = {}) => {
-  const {
-    model = 'default',
-    temperature = 0.7,
-    mcpServer = 'anthropic',
-    workflowType = 'code',
-    confirmationMode = true,
-    continueExecution = false,
-    previousResponse = null
-  } = options;
-
-  // Ako nastavljamo izvršavanje nakon potvrde korisnika
-  if (continueExecution && previousResponse) {
-    return continueWorkflowExecution(previousResponse, options);
+/**
+ * Izvrši kompletan workflow - od razumijevanja, generiranja koda, izvršavanja i debugiranja
+ * @param {string} message - Poruka za poslati agentu
+ * @param {function} onConfirm - Callback koji će biti pozvan kada je potrebna potvrda
+ * @param {Object} options - Opcije za izvršavanje
+ * @returns {Object} - Rezultat izvršavanja
+ */
+export const executeWorkflow = async (message, onConfirm, options = {}) => {
+  console.log('Pokretanje workflow-a', message);
+  
+  // Korak 1: Pozovi Executor agenta za razumijevanje intencije
+  console.log('Korak 1: Razumijevanje intencije kroz Executor agent');
+  const executorResponse = await sendChatMessage(
+    message, 
+    'executor', 
+    { ...options }
+  );
+  console.log('Executor odgovor:', executorResponse);
+  
+  let result = {
+    inicijalni_odgovor: executorResponse.response,
+    sugestirani_agent: executorResponse.suggested_agent,
+    kod: [],
+    izvrsavanje: null,
+    koristeni_agenti: ['Executor']
+  };
+  
+  // Provjeri treba li generisati kod na osnovu odgovora Executor-a
+  const potrebanKod = executorResponse.suggested_agent === 'code' || 
+                      message.toLowerCase().includes('generiši kod') || 
+                      message.toLowerCase().includes('napiši kod') ||
+                      message.toLowerCase().includes('kreiraj kod') ||
+                      message.toLowerCase().includes('program') ||
+                      executorResponse.response.toLowerCase().includes('generiši kod');
+  
+  if (!potrebanKod) {
+    console.log('Nije potreban kod - završavam workflow s odgovorom Executor-a');
+    result.status = 'završeno_bez_koda';
+    return result;
   }
-
-  let initialAgentResponse;
-  let plannerResponse;
-  const originalPrompt = message;
-
-  try {
-    // Korak 1: Poziv Executor agentu da razumije namjeru
-    console.log(`Workflow - Korak 1: Pozivam Executor agenta da razumije upit: "${message}"`);
-    try {
-      initialAgentResponse = await sendChatMessage(
-        message,
-        'executor',
-        { model, temperature, mcpServer, auto_process: false }
-      );
-
-      if (!initialAgentResponse || !initialAgentResponse.response) {
-        throw new Error('Nema odgovora od Executor agenta');
-      }
-    } catch (fetchError) {
-      console.error('Greška u komunikaciji s backendom:', fetchError);
-      return {
-        status: 'error',
-        message: 'Greška tijekom izvršavanja workflow-a: ' + (fetchError.message || 'Failed to fetch'),
-        phase: 'intent_analysis_failed',
-        workflowResult: {
-          error: fetchError.message || 'Neuspješna komunikacija s backendom. Provjerite da li backend server radi.',
-          agents: ['Executor'],
-          initialResponse: "Greška u komunikaciji s backendom. Provjerite da li backend radi."
-        },
-        originalPrompt
-      };
-    }
-
-    // Korak 1.5: Dobijanje plana izvršavanja od planner agenta
-    console.log(`Workflow - Korak 1.5: Pozivam Planner agenta za plan izvršavanja...`);
-    try {
-      const plannerMessage = `Na osnovu korisničkog zahtjeva: "${message}", napravi detaljan plan izvršavanja. 
-Koje korake treba poduzeti da se ispuni ovaj zahtjev? 
-Koji agenti trebaju biti uključeni? 
-Objasni korisniku kako ćeš riješiti njegov zadatak.`;
+  
+  // Korak 2: Pozovi Code agenta za generiranje koda
+  console.log('Korak 2: Generiranje koda kroz Code agent');
+  const codeAgentResponse = await sendChatMessage(
+    message, 
+    'code', 
+    { ...options }
+  );
+  console.log('Code agent odgovor:', codeAgentResponse);
+  result.koristeni_agenti.push('Code');
+  
+  // Ekstraktiraj blokove koda iz odgovora
+  const codeBlocks = extractMultipleCodeBlocks(codeAgentResponse.response);
+  result.kod = codeBlocks;
+  
+  if (codeBlocks.length === 0) {
+    console.log('Nema pronađenog koda u odgovoru - vraćam rezultat');
+    result.inicijalni_odgovor = codeAgentResponse.response;
+    result.status = 'bez_koda';
+    return result;
+  }
+  
+  // Odluči koji kod će se izvršiti (prvi blok ili korisnikov izbor)
+  let izabraniKod;
+  let izabraniJezik;
+  
+  if (codeBlocks.length === 1) {
+    // Samo jedan blok koda, koristimo njega
+    izabraniKod = codeBlocks[0].code;
+    izabraniJezik = codeBlocks[0].language;
+  } else if (codeBlocks.length > 1) {
+    // Više blokova koda - pitaj korisnika koji želi izvršiti ako postoji funkcija za potvrdu
+    if (onConfirm && typeof onConfirm === 'function') {
+      const izbor = await onConfirm({
+        message: "Pronađeno je više blokova koda. Koji želite izvršiti?",
+        options: codeBlocks.map((block, index) => ({
+          label: `Blok ${index + 1} (${block.language})`,
+          value: index
+        }))
+      });
       
-      plannerResponse = await sendChatMessage(
-        plannerMessage,
-        'planner',
-        { model, temperature, mcpServer, auto_process: false }
-      );
-
-    } catch (plannerError) {
-      console.log('Greška pri dobijanju plana, nastavljam bez plana:', plannerError);
-      plannerResponse = {
-        response: "Nije bilo moguće generisati plan izvršavanja. Nastavit ću s izvršavanjem na osnovu dostupnih informacija."
-      };
-    }
-
-    // Dodamo plan u rezultat koji vraćamo 
-    const executorAnalysis = initialAgentResponse.response;
-    const plan = plannerResponse?.response || "Plan nije dostupan.";
-    
-    // Provjera da li treba generisati kod (slična logika kao prije)
-    const executorResponseText = initialAgentResponse.response.toLowerCase();
-    const suggestedAgent = initialAgentResponse.suggested_agent;
-    const requiresCode = suggestedAgent === 'code' ||
-                   executorResponseText.includes('programiranje') ||
-                   executorResponseText.includes('kod') ||
-                   executorResponseText.includes('napravi') ||
-                   executorResponseText.includes('kreiraj') ||
-                   executorResponseText.includes('```');
-
-    // Ako je uključen confirmation mode, vrati samo rezultat prve faze i traži potvrdu
-    if (confirmationMode) {
-      console.log('Workflow - Vraćam plan i čekam potvrdu korisnika prije nastavka.');
-      return {
-        status: 'awaiting_confirmation',
-        message: 'Čekam potvrdu korisnika za nastavak izvršavanja.',
-        phase: 'planning',
-        workflowResult: {
-          executorAnalysis: executorAnalysis,
-          initialResponse: plan,
-          suggestedAgent: suggestedAgent,
-          requiresCode: requiresCode,
-          agents: ['Executor', 'Planner']
-        },
-        originalPrompt
-      };
-    }
-
-    // Ako nije uključen confirmation mode, automatski nastavi s izvršavanjem
-    const continueOptions = { 
-      ...options, 
-      continueExecution: true,
-      confirmationMode: false
-    };
-
-    // Nastavi s izvršavanjem
-    return continueWorkflowExecution({
-      executorAnalysis,
-      initialResponse: plan,
-      suggestedAgent: suggestedAgent,
-      requiresCode,
-      originalPrompt
-    }, continueOptions);
-
-  } catch (error) {
-    console.error('Greška tokom izvršavanja workflow-a:', error);
-    return {
-      status: 'error',
-      message: `Greška tijekom izvršavanja workflow-a: ${error.message}`,
-      phase: 'error',
-      workflowResult: {
-        error: error.message,
-        initialResponse: "Došlo je do greške u izvršavanju workflow-a."
-      }
-    };
-  }
-};
-
-// Nastavak izvršavanja workflow-a nakon potvrde
-const continueWorkflowExecution = async (previousState, options = {}) => {
-  const {
-    model = 'default',
-    temperature = 0.7,
-    mcpServer = 'anthropic',
-    workflowType = 'code'
-  } = options;
-
-  const { 
-    executorAnalysis, 
-    initialResponse, 
-    suggestedAgent, 
-    requiresCode, 
-    originalPrompt 
-  } = previousState;
-
-  let codeAgentResponse;
-  let generatedCode = null;
-  let generatedLanguage = 'text';
-  let codeBlocks = {};
-
-  try {
-    // Korak 2: Ako je potreban kod, pozovi Code agenta
-    if (requiresCode) {
-      console.log(`Workflow - Korak 2: Pozivam Code agenta...`);
-      const codeAgentMessage = `Na osnovu zahtjeva korisnika: "${originalPrompt}", molim te generiši odgovarajući kod.`;
-
-      try {
-        codeAgentResponse = await sendChatMessage(
-          codeAgentMessage,
-          'code',
-          { model, temperature, mcpServer, auto_process: false }
-        );
-
-        if (!codeAgentResponse || !codeAgentResponse.response) {
-          console.warn('Code agent nije vratio odgovor, pokušavam koristiti odgovor Executora.');
-          codeBlocks = extractCodeBlocks(executorAnalysis);
-        } else {
-          codeBlocks = extractCodeBlocks(codeAgentResponse.response);
-        }
-      } catch (codeError) {
-        console.error('Greška kod poziva Code agenta:', codeError);
-        return {
-          status: 'error',
-          message: 'Greška kod generisanja koda: ' + (codeError.message || 'Failed to fetch'),
-          phase: 'code_generation_failed',
-          workflowResult: {
-            initialResponse: initialResponse,
-            response: executorAnalysis,
-            error: codeError.message || 'Neuspješna komunikacija s Code agentom',
-            agents: ['Executor', 'Planner']
-          },
-          originalPrompt
-        };
-      }
-
-      generatedCode = codeBlocks.code;
-      generatedLanguage = codeBlocks.language;
-
-      if (!generatedCode) {
-          console.log('Workflow - Korak 2 Result: Ni Code agent nije vratio kod. Završavam workflow.');
-          return {
-              status: 'completed_no_code',
-              message: 'Čini se da zahtjev nije rezultirao kodom.',
-              phase: 'code_generation_failed',
-              workflowResult: {
-                  initialResponse: initialResponse,
-                  summary: executorAnalysis,
-                  agents: ['Executor', 'Planner']
-              },
-              originalPrompt
-          };
-      }
-      console.log(`Workflow - Korak 2 Result: Kod (${generatedLanguage}) generisan.`);
-    } else {
-        console.log('Workflow - Završavam jer nije potreban kod.');
-        return {
-            status: 'completed_no_code',
-            message: 'Zahtjev ne zahtijeva generisanje koda.',
-            phase: 'intent_analysis',
-            workflowResult: {
-                initialResponse: initialResponse,
-                summary: executorAnalysis,
-                agents: ['Executor', 'Planner']
-            },
-            originalPrompt
-        };
-    }
-
-    // Korak 3: Izvršavanje koda (koristi generisani kod)
-    console.log(`Workflow - Korak 3: Izvršavanje koda (${generatedLanguage})...`);
-    const executionResult = await executeCode(
-      generatedCode,
-      generatedLanguage,
-      'script',
-      currentSessionId,
-      {
-        autoDebug: workflowType !== 'no_debug',
-        mcpServer
-      }
-    );
-
-    // Korak 4: Ako je bilo grešaka i izvršen je debug, pokušaj ponovo izvršiti kod
-    let fixedResult = null;
-    let fixedCode = null;
-    if (executionResult.error && executionResult.debugResult) {
-      console.log('Workflow - Korak 4: Pokušavam izvršiti ispravljeni kod nakon debugiranja...');
-
-      const fixedBlocks = extractCodeBlocks(executionResult.debugResult);
-      fixedCode = fixedBlocks.code;
-      const fixedLanguage = fixedBlocks.language || generatedLanguage;
-
-      if (fixedCode) {
-        console.log('Izvršavanje ispravljenog koda...');
-        fixedResult = await executeCode(
-          fixedCode,
-          fixedLanguage,
-          'script',
-          currentSessionId,
-          { autoDebug: false, mcpServer }
-        );
-        console.log('Workflow - Korak 4 Result: Izvršavanje ispravljenog koda završeno.');
+      if (izbor !== undefined && izbor !== null) {
+        izabraniKod = codeBlocks[izbor].code;
+        izabraniJezik = codeBlocks[izbor].language;
       } else {
-        console.log('Workflow - Korak 4 Result: Nije pronađen ispravljeni kod u debug odgovoru.');
+        // Korisnik je odustao
+        console.log('Korisnik nije izabrao kod za izvršenje');
+        result.status = 'korisnik_odustao';
+        return result;
       }
+    } else {
+      // Nema funkcije za potvrdu, uzmi prvi blok
+      izabraniKod = codeBlocks[0].code;
+      izabraniJezik = codeBlocks[0].language;
     }
-
-    // Korak 5: Vrati finalni rezultat workflowa
-    console.log('Workflow - Korak 5: Sastavljanje finalnog rezultata.');
-    return {
-      status: 'completed',
-      message: fixedResult ? 'Workflow završen s debugiranjem' : 'Workflow završen',
-      phase: fixedResult ? 'execution_fixed' : 'execution',
-      workflowResult: {
-          initialResponse: initialResponse,
-          executorAnalysis: executorAnalysis,
-          codeAgentResponse: codeAgentResponse ? codeAgentResponse.response : null,
-          code: {
-              original: generatedCode,
-              fixed: fixedCode,
-              language: generatedLanguage,
-              css: codeBlocks.cssCode,
-              js: codeBlocks.jsCode
-          },
-          executionResult: executionResult,
-          fixedResult: fixedResult,
-          agents: ['Executor', 'Planner', ...(requiresCode ? ['Code'] : []), 'Executor(Code)', ...(executionResult.wasDebugAttempted ? ['Debugger'] : []), ...(fixedResult ? ['Executor(FixedCode)'] : [])],
-          type: 'code'
-      },
-      originalPrompt,
-      mcpServer
-    };
-  } catch (error) {
-    console.error('Greška tokom nastavka izvršavanja workflow-a:', error);
-    return {
-      status: 'error',
-      message: `Greška tijekom izvršavanja workflow-a: ${error.message}`,
-      phase: 'error',
-      workflowResult: {
-        error: error.message,
-        initialResponse: initialResponse || "Došlo je do greške u izvršavanju workflow-a."
-      }
-    };
   }
+  
+  // Korak 3: Izvrši odabrani kod
+  if (izabraniKod && izabraniJezik) {
+    console.log('Korak 3: Izvršavanje koda', izabraniJezik);
+    try {
+      const executionResponse = await executeCode(izabraniKod, izabraniJezik);
+      console.log('Rezultat izvršavanja:', executionResponse);
+      result.izvrsavanje = executionResponse;
+      result.status = executionResponse.error ? 'izvršeno_s_greškom' : 'uspješno_izvršeno';
+      
+      // Korak 4: Debugiranje, ako ima grešaka
+      if (executionResponse.error && options.debug !== false) {
+        console.log('Korak 4: Debugiranje koda');
+        const debugResponse = await sendChatMessage(
+          `Moj kod ima grešku: ${executionResponse.error}. Kod: ${izabraniKod}`,
+          'debugger',
+          { ...options }
+        );
+        console.log('Debugger odgovor:', debugResponse);
+        result.koristeni_agenti.push('Debugger');
+        result.debug = debugResponse.response;
+      }
+    } catch (error) {
+      console.error('Greška prilikom izvršavanja koda:', error);
+      result.izvrsavanje = { error: error.message };
+      result.status = 'greška_izvršavanja';
+    }
+  }
+  
+  console.log('Workflow završen, vraćam rezultat:', result);
+  return result;
 };
+
+/**
+ * Ekstraktira više blokova koda iz odgovora.
+ * @param {string} response - Odgovor AI agenta
+ * @returns {Array} - Niz ekstraktiranih blokova koda
+ */
+function extractMultipleCodeBlocks(response) {
+  if (!response) return [];
+  
+  const codeBlocks = [];
+  // Regularni izraz za pronalazak blokova koda
+  const codeBlockRegex = /```([a-zA-Z0-9]*)\n([\s\S]*?)```/g;
+  let match;
+  
+  // Pronađi sve blokove koda
+  while ((match = codeBlockRegex.exec(response)) !== null) {
+    const language = match[1] || 'text';
+    const code = match[2] || '';
+    
+    if (code.trim()) {
+      codeBlocks.push({
+        language,
+        code,
+        fullMatch: match[0]
+      });
+    }
+  }
+  
+  return codeBlocks;
+}
+
+/**
+ * Ekstraktira blokove koda iz odgovora.
+ * @param {string} response - Odgovor AI agenta
+ * @returns {Object} - Ekstraktirani kod i jezik
+ */
+function extractCodeFromResponse(response) {
+  if (!response) return null;
+  
+  // Regex za pronalaženje code blokova ```language\ncode```
+  const codeBlockRegex = /```(?:[a-z]*)\n([\s\S]*?)\n```/i;
+  const match = response.match(codeBlockRegex);
+  
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  
+  return null;
+}
 
 // Pomoćna funkcija za ekstrakciju koda - **VAŽNO**: Prebaciti u poseban util fajl?
 function extractCodeBlocks(content) {
@@ -538,26 +417,13 @@ function prepareFullHtmlCode(html, css, js) {
         if (htmlWithResources.includes('</body>')) {
           htmlWithResources = htmlWithResources.replace('</body>', `\n<script>\n${js}\n</script>\n</body>`);
         } else {
-          htmlWithResources += `\n<script>\n${js}\n</script>`;
+          // Dodaj body ako ne postoji?
+          htmlWithResources = htmlWithResources.replace('</body>', `\n<script>\n${js}\n</script>\n</body>`);
         }
       }
-      return htmlWithResources;
-    } else {
-      // Kreiraj osnovnu strukturu ako je samo fragment
-      return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Generated Preview</title>
-  ${css ? `<style>\n${css}\n</style>` : ''}
-</head>
-<body>
-  ${html}
-  ${js ? `\n<script>\n${js}\n</script>` : ''}
-</body>
-</html>`;
     }
+
+    return htmlWithResources;
 }
 
 // Pomoćna funkcija za detekciju jezika - **VAŽNO**: Prebaciti u util?
@@ -575,6 +441,7 @@ function detectLanguage(code) {
 // Resetuje trenutnu sesiju
 export const resetSession = () => {
   currentSessionId = null;
+  localStorage.removeItem('current_session_id');
   console.log("Sesija resetovana");
 };
 
@@ -583,6 +450,7 @@ export const getCurrentSessionId = () => {
   return currentSessionId;
 };
 
+// Dohvaćanje liste sesija
 export const getSessions = async () => {
   try {
     const response = await fetch(`${API_BASE_URL}/sessions`);
@@ -598,6 +466,7 @@ export const getSessions = async () => {
   }
 };
 
+// Dohvaćanje detalja određene sesije
 export const getSessionDetails = async (sessionId) => {
   try {
     const response = await fetch(`${API_BASE_URL}/session/${sessionId}`);
@@ -609,6 +478,348 @@ export const getSessionDetails = async (sessionId) => {
     return await response.json();
   } catch (error) {
     console.error(`Error fetching session ${sessionId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Šalje zahtjev na backend API
+ */
+function sendRequest(endpoint, data = {}) {
+  return fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(data)
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+    return response.json();
+  });
+}
+
+/**
+ * Dohvaća session ID
+ */
+function getSessionId() {
+  return currentSessionId;
+}
+
+// Definiraj default model ako nije eksplicitno postavljen
+const DEFAULT_MODEL = 'gpt-3.5-turbo';
+
+/**
+ * Nastavlja izvršavanje workflow-a nakon korisničke potvrde
+ */
+export const continueWorkflowExecution = async (previousState, options = {}) => {
+  console.log('continueWorkflowExecution dobio podatke:', previousState);
+  
+  if (!previousState || !previousState.originalPrompt) {
+    console.error('Nedostaje originalPrompt u prethodnom stanju:', previousState);
+    return { 
+      error: true, 
+      message: 'Nedostaju potrebni podaci za nastavak workflow-a'
+    };
+  }
+
+  try {
+    // Koristimo sendChatMessage sa Code agentom za generiranje koda
+    console.log('Generiranje koda za:', previousState.originalPrompt);
+    const codeAgentResponse = await sendChatMessage(
+      previousState.originalPrompt,
+      'code',
+      { 
+        model: options.model || DEFAULT_MODEL,
+        temperature: options.temperature || 0.7,
+        mcpServer: options.mcpServer || 'anthropic'
+      }
+    );
+    
+    if (!codeAgentResponse || !codeAgentResponse.response) {
+      return {
+        error: true,
+        message: 'Greška kod generiranja koda',
+        phase: 'code_generation'
+      };
+    }
+    
+    // Ekstraktiraj kod iz odgovora
+    const codeData = extractCodeBlocks(codeAgentResponse.response);
+    console.log('Ekstraktirani kod:', codeData);
+    
+    // Izvrši kod
+    let executionResult = null;
+    if (codeData.code) {
+      executionResult = await executeCode(
+        codeData.code, 
+        codeData.language || 'javascript',
+        'script',
+        currentSessionId
+      );
+    }
+    
+    // Vrati rezultat workflow-a
+    return {
+      workflowResult: {
+        initialResponse: codeAgentResponse.response,
+        code: codeData.code,
+        language: codeData.language,
+        executionResult: executionResult,
+        summary: `Workflow izvršen. ${executionResult ? (executionResult.error ? 'Greška pri izvršavanju.' : 'Kod uspješno izvršen.') : 'Kod nije izvršen.'}`
+      },
+      phase: executionResult && executionResult.error ? 'execution_error' : 'execution_success',
+      message: 'Workflow izvršen'
+    };
+    
+  } catch (error) {
+    console.error('Greška kod izvršavanja workflow-a:', error);
+    return {
+      error: true,
+      message: error.message || 'Greška kod izvršavanja workflow-a',
+      phase: 'error'
+    };
+  }
+};
+
+/**
+ * Učitava sve dostupne sesije iz lokalnog skladišta
+ * @returns {Array} Lista svih sesija
+ */
+export const getAllSessions = () => {
+  try {
+    const sessions = localStorage.getItem('sessions');
+    return sessions ? JSON.parse(sessions) : [];
+  } catch (error) {
+    console.error('Greška pri učitavanju sesija:', error);
+    return [];
+  }
+};
+
+/**
+ * Sprema novu sesiju u lokalno skladište
+ * @param {Object} session - Podaci o sesiji
+ * @param {string} session.id - ID sesije
+ * @param {string} session.timestamp - Vrijeme kreiranja sesije
+ * @param {string} session.lastMessage - Posljednja poruka u sesiji
+ */
+export const saveSession = (session) => {
+  try {
+    const sessions = getAllSessions();
+    const existingIndex = sessions.findIndex(s => s.id === session.id);
+    
+    if (existingIndex >= 0) {
+      // Ažuriraj postojeću sesiju
+      sessions[existingIndex] = { ...sessions[existingIndex], ...session };
+    } else {
+      // Dodaj novu sesiju
+      sessions.push(session);
+    }
+    
+    localStorage.setItem('sessions', JSON.stringify(sessions));
+    return true;
+  } catch (error) {
+    console.error('Greška pri spremanju sesije:', error);
+    return false;
+  }
+};
+
+/**
+ * Briše sesiju iz lokalnog skladišta
+ * @param {string} sessionId - ID sesije za brisanje
+ * @returns {boolean} True ako je brisanje uspješno
+ */
+export const deleteSessionLocal = (sessionId) => {
+  try {
+    const sessions = getAllSessions();
+    const filteredSessions = sessions.filter(s => s.id !== sessionId);
+    localStorage.setItem('sessions', JSON.stringify(filteredSessions));
+    return true;
+  } catch (error) {
+    console.error('Greška pri brisanju sesije:', error);
+    return false;
+  }
+};
+
+/**
+ * Učitava sadržaj sesije iz lokalnog skladišta
+ * @param {string} sessionId - ID sesije
+ * @returns {Object|null} Sadržaj sesije ili null ako sesija nije pronađena
+ */
+export const getSessionContent = (sessionId) => {
+  try {
+    const sessionKey = `session_${sessionId}`;
+    const content = localStorage.getItem(sessionKey);
+    return content ? JSON.parse(content) : null;
+  } catch (error) {
+    console.error('Greška pri učitavanju sadržaja sesije:', error);
+    return null;
+  }
+};
+
+/**
+ * Sprema sadržaj sesije u lokalno skladište
+ * @param {string} sessionId - ID sesije
+ * @param {Array} messages - Poruke u sesiji
+ * @returns {boolean} True ako je spremanje uspješno
+ */
+export const saveSessionContent = (sessionId, messages) => {
+  try {
+    const sessionKey = `session_${sessionId}`;
+    localStorage.setItem(sessionKey, JSON.stringify(messages));
+    
+    // Također ažuriraj metapodatke sesije
+    const lastMessage = messages.length > 0 ? messages[messages.length - 1].content : '';
+    saveSession({
+      id: sessionId,
+      timestamp: new Date().toISOString(),
+      lastMessage: lastMessage.substring(0, 100) + (lastMessage.length > 100 ? '...' : '')
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Greška pri spremanju sadržaja sesije:', error);
+    return false;
+  }
+};
+
+/**
+ * Učitaj listu sesija
+ * @returns {Promise<Array>} Niz sesija
+ */
+export const listSessions = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/sessions`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP greška ${response.status}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Greška prilikom učitavanja sesija:', error);
+    throw error;
+  }
+};
+
+/**
+ * Učitaj sesiju po ID-u
+ * @param {string} sessionId - ID sesije
+ * @returns {Promise<Object>} Podaci o sesiji
+ */
+export const getSession = async (sessionId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP greška ${response.status}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Greška prilikom učitavanja sesije:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obriši sesiju po ID-u
+ * @param {string} sessionId - ID sesije
+ * @returns {Promise<Object>} Rezultat operacije
+ */
+export const deleteSession = async (sessionId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP greška ${response.status}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Greška prilikom brisanja sesije:', error);
+    throw error;
+  }
+};
+
+/**
+ * Dohvati dostupne modele ovisno o odabranom MCP serveru
+ * @param {string} mcpServer - Naziv MCP servera ('anthropic' ili 'openai')
+ * @returns {Promise<Object>} - Rezultat API poziva s dostupnim modelima
+ */
+export const getAvailableModels = async (mcpServer = 'anthropic') => {
+  try {
+    let endpoint;
+    if (mcpServer.toLowerCase() === 'openai') {
+      endpoint = '/api/openai/models';
+    } else {
+      endpoint = '/api/anthropic/models';
+    }
+    
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'GET',
+      mode: 'cors',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching available models for ${mcpServer}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Dohvati statistiku korištenja tokena za trenutnu sesiju (samo za OpenAI)
+ * @param {string} sessionId - ID sesije (opcionalno, koristi trenutnu ako nije navedeno)
+ * @returns {Promise<Object>} - Statistika korištenja tokena
+ */
+export const getTokenUsageStats = async (sessionId = null) => {
+  try {
+    const activeSessionId = sessionId || currentSessionId;
+    if (!activeSessionId) {
+      throw new Error('Nema aktivne sesije za dohvat statistike tokena');
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/api/openai/token-usage/${activeSessionId}`, {
+      method: 'GET',
+      mode: 'cors',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching token usage stats:', error);
     throw error;
   }
 };

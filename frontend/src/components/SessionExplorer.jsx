@@ -1,155 +1,148 @@
 import React, { useState, useEffect } from 'react';
-import { getSessions, getSessionDetails } from '../api';
+import { FaTrash, FaExternalLinkAlt, FaSearch, FaClock } from 'react-icons/fa';
+import { getAllSessions, deleteSession } from '../api';
+import './SessionExplorer.css';
 
-const SessionExplorer = ({ onSessionSelect }) => {
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [selectedSessionId, setSelectedSessionId] = useState(null);
-  const [sessionDetails, setSessionDetails] = useState(null);
+/**
+ * Komponenta za prikaz i upravljanje historijom sesija
+ * 
+ * @param {Object} props - Props komponente
+ * @param {Array} props.sessions - Lista sesija (opciono, ako nije proslijeđeno, poziva getAllSessions)
+ * @param {Function} props.onSelectSession - Funkcija koja se poziva pri odabiru sesije
+ * @param {Function} props.onDeleteSession - Funkcija koja se poziva pri brisanju sesije
+ * @returns {JSX.Element} SessionExplorer komponenta
+ */
+const SessionExplorer = ({ sessions: propSessions, onSelectSession, onDeleteSession }) => {
+  const [sessions, setSessions] = useState(propSessions || []);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredSessions, setFilteredSessions] = useState([]);
 
-  // Učitaj listu sesija
-  const fetchSessions = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const data = await getSessions();
-      setSessions(data.sessions || []);
-    } catch (err) {
-      setError('Greška prilikom učitavanja sesija: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Učitaj detalje odabrane sesije
-  const fetchSessionDetails = async (sessionId) => {
-    if (!sessionId) return;
-    
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const details = await getSessionDetails(sessionId);
-      setSessionDetails(details);
-      
-      // Proslijedi detalje parent komponenti ako je potrebno
-      if (onSessionSelect) {
-        onSessionSelect(details);
-      }
-    } catch (err) {
-      setError(`Greška prilikom učitavanja sesije ${sessionId}: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Učitaj sesije pri prvom renderiranju
+  // Učitaj sesije ako nisu proslijeđene kroz props
   useEffect(() => {
-    fetchSessions();
-  }, []);
+    if (!propSessions) {
+      setSessions(getAllSessions());
+    } else {
+      setSessions(propSessions);
+    }
+  }, [propSessions]);
 
-  // Rukovanje klikom na sesiju
-  const handleSessionClick = (sessionId) => {
-    setSelectedSessionId(sessionId);
-    fetchSessionDetails(sessionId);
+  // Filtriraj sesije pri promjeni search izraza
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredSessions(sessions);
+    } else {
+      const term = searchTerm.toLowerCase();
+      setFilteredSessions(
+        sessions.filter(
+          session => 
+            session.id.toLowerCase().includes(term) || 
+            (session.name && session.name.toLowerCase().includes(term)) ||
+            (session.lastMessage && session.lastMessage.toLowerCase().includes(term))
+        )
+      );
+    }
+  }, [searchTerm, sessions]);
+
+  // Formatiraj timestamp u čitljivi datum
+  const formatDate = (timestamp) => {
+    if (!timestamp) return 'Nepoznato vrijeme';
+    
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    } catch (e) {
+      return 'Neispravan format datuma';
+    }
+  };
+
+  // Skrati session ID za prikaz
+  const shortenSessionId = (id) => {
+    if (!id) return 'ID nije dostupan';
+    return id.length > 8 ? `${id.substring(0, 8)}...` : id;
+  };
+
+  // Hendlaj brisanje sesije
+  const handleDeleteSession = (sessionId, e) => {
+    e.stopPropagation();
+    if (window.confirm('Da li ste sigurni da želite obrisati ovu sesiju?')) {
+      const success = deleteSession(sessionId);
+      if (success) {
+        setSessions(prevSessions => prevSessions.filter(s => s.id !== sessionId));
+        if (onDeleteSession) onDeleteSession(sessionId);
+      }
+    }
+  };
+
+  // Hendlaj odabir sesije
+  const handleSelectSession = (sessionId) => {
+    if (onSelectSession) onSelectSession(sessionId);
   };
 
   return (
-    <div className="session-explorer glass-card p-5">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gradient">Historija sesija</h2>
-        
-        <button 
-          className="button secondary flex items-center"
-          onClick={fetchSessions}
-          disabled={loading}
-        >
-          {loading ? (
-            <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          ) : (
-            <svg className="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          )}
-          Osvježi
-        </button>
-      </div>
-      
-      {error && (
-        <div className="bg-red-900 bg-opacity-20 border border-red-500 text-red-300 p-3 rounded mb-4">
-          {error}
+    <div className="session-explorer">
+      <div className="session-explorer-header">
+        <h2>Historija sesija</h2>
+        <div className="search-container">
+          <FaSearch className="search-icon" />
+          <input
+            type="text"
+            placeholder="Pretraži sesije..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="search-input"
+          />
         </div>
-      )}
-      
-      <div className="sessions-list mb-6">
-        {sessions.length === 0 ? (
-          <div className="text-gray-400 p-4 text-center">
-            <svg className="w-12 h-12 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-            <p>Nema dostupnih sesija</p>
-            <p className="text-xs mt-1">Sesije će se pojaviti nakon razgovora s agentima</p>
+      </div>
+
+      <div className="sessions-list">
+        {filteredSessions.length === 0 ? (
+          <div className="no-sessions">
+            {searchTerm.trim() 
+              ? 'Nema rezultata za vašu pretragu.' 
+              : 'Nema dostupnih sesija.'}
           </div>
         ) : (
-          <div className="max-h-60 overflow-y-auto">
-            <ul className="divide-y divide-gray-700">
-              {sessions.map((sessionId) => (
-                <li 
-                  key={sessionId}
-                  className={`py-2 px-3 cursor-pointer hover:bg-gray-800 transition-colors ${
-                    sessionId === selectedSessionId ? 'bg-gray-800 border-l-2 border-accent-blue' : ''
-                  }`}
-                  onClick={() => handleSessionClick(sessionId)}
-                >
-                  <div className="flex items-center">
-                    <svg className="h-4 w-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                    </svg>
-                    <div className="font-medium">Sesija {sessionId.substring(0, 8)}...</div>
+          filteredSessions.map(session => (
+            <div 
+              key={session.id} 
+              className="session-item"
+              onClick={() => handleSelectSession(session.id)}
+            >
+              <div className="session-info">
+                <div className="session-name">
+                  {session.name || `Sesija ${shortenSessionId(session.id)}`}
+                </div>
+                <div className="session-id">ID: {shortenSessionId(session.id)}</div>
+                {session.timestamp && (
+                  <div className="session-time">
+                    <FaClock className="time-icon" /> {formatDate(session.timestamp)}
                   </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+                )}
+                {session.lastMessage && (
+                  <div className="session-message">{session.lastMessage}</div>
+                )}
+              </div>
+              
+              <div className="session-actions">
+                <button 
+                  className="session-select-btn"
+                  onClick={() => handleSelectSession(session.id)}
+                  title="Učitaj sesiju"
+                >
+                  <FaExternalLinkAlt />
+                </button>
+                <button 
+                  className="session-delete-btn"
+                  onClick={(e) => handleDeleteSession(session.id, e)}
+                  title="Obriši sesiju"
+                >
+                  <FaTrash />
+                </button>
+              </div>
+            </div>
+          ))
         )}
       </div>
-      
-      {sessionDetails && (
-        <div className="session-details">
-          <h3 className="text-lg font-medium mb-3 flex items-center">
-            <svg className="h-5 w-5 mr-2 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Detalji sesije
-          </h3>
-          
-          <div className="glass-card bg-opacity-30 p-0 rounded overflow-hidden">
-            <div className="max-h-96 overflow-y-auto p-4">
-              {sessionDetails.history.map((item, index) => (
-                <div key={index} className="mb-5 pb-5 border-b border-gray-700 last:border-0 last:mb-0 last:pb-0">
-                  <div className="font-medium text-accent-blue">{item.agent}</div>
-                  <div className="text-sm text-gray-300 mt-1">
-                    <strong>Upit:</strong> {item.message}
-                  </div>
-                  <div className="text-sm mt-3">
-                    <strong className="text-gray-400">Odgovor:</strong>
-                    <pre className="whitespace-pre-wrap mt-1 bg-gray-800 bg-opacity-50 p-3 rounded border border-gray-700 text-xs">
-                      {typeof item.response === 'object' 
-                        ? JSON.stringify(item.response, null, 2) 
-                        : item.response}
-                    </pre>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -14,6 +14,7 @@ SERVER_REGISTRY = {
     "twitter": "twitter_mcp.server",
     "anthropic": "anthropic_mcp.server",
     "huggingface": "huggingface_mcp.server",
+    "openai": "openai_mcp.server",
     # Dodajte nove servere ovdje
 }
 

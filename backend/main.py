@@ -30,6 +30,7 @@ from agents.mcp_router_agent import handle as mcp_router_agent
 from utils.session_store import save_to_session, get_session, session_memory
 # Izmjeni na direktni import
 from endpoints.anthropic_endpoints import router as anthropic_router
+from endpoints.openai_endpoints import router as openai_router
 
 # Učitaj .env fajl
 load_dotenv()
@@ -73,6 +74,9 @@ app.add_middleware(
 
 # Uključi anthropic_endpoints router
 app.include_router(anthropic_router)
+
+# Uključi openai_endpoints router
+app.include_router(openai_router)
 
 # Mapiraj agente za direktno usmjeravanje
 agent_map = {

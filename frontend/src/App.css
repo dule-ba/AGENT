@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 /* AI Agent Platform - Dark Theme */
 
 /* Reset i osnovni stilovi */
@@ -8,56 +10,54 @@
 }
 
 :root {
-  /* Dark Mode theme colors */
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --accent-blue: #3b82f6;
-  --accent-green: #10b981;
-  --accent-purple: #8b5cf6;
-  --card-bg: rgba(30, 41, 59, 0.6);
-  --sidebar-bg: #111827;
-  --input-bg: rgba(30, 41, 59, 0.8);
-  --success: #10b981;
-  --error: #ef4444;
-  --warning: #f59e0b;
+  --primary-color: #3b82f6;
+  --primary-hover: #2563eb;
+  --secondary-color: #6b7280;
+  --background-dark: #111827;
+  --background-card: #1f2937;
+  --background-input: #374151;
+  --border-color: #4b5563;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-tertiary: #9ca3af;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.5;
-  background-color: var(--bg-primary);
+  background-color: var(--background-dark);
   color: var(--text-primary);
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Glassmorphism card style */
 .glass-card {
-  background: var(--card-bg);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  background-color: rgba(31, 41, 55, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(75, 85, 99, 0.3);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 /* Sidebar styles */
 .sidebar {
-  background-color: var(--sidebar-bg);
-  width: 64px;  /* Narrow sidebar with just icons */
-  height: 100vh;
-  position: fixed;
-  left: 0;
-  top: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 20px 0;
-  z-index: 10;
+  background-color: var(--background-card);
+  border-right: 1px solid var(--border-color);
   transition: width 0.3s ease;
+  z-index: 10;
 }
 
 .sidebar.expanded {
@@ -81,7 +81,7 @@ body {
 }
 
 .sidebar-item.active {
-  background-color: var(--accent-blue);
+  background-color: var(--primary-color);
   color: white;
 }
 
@@ -89,6 +89,7 @@ body {
 .app-container {
   display: flex;
   height: 100vh;
+  background-color: var(--background-dark);
 }
 
 .content-area {
@@ -101,38 +102,62 @@ body {
 
 .grid-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 20px;
-  height: calc(100vh - 40px);
-  width: 100%;
+  height: 100%;
+  grid-template-columns: 1fr;
+  grid-template-rows: 60% 40%;
+  grid-template-areas:
+    "chat"
+    "workspace";
+  gap: 1rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .grid-layout {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+    grid-template-areas:
+      "chat workspace";
+  }
 }
 
 .chat-area {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  height: 100%;
+  grid-area: chat;
   overflow: hidden;
-}
-
-.flow-area {
-  grid-column: 2;
-  grid-row: 1;
-  height: 100%;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .workspace-area {
-  grid-column: 2;
-  grid-row: 2;
-  height: 100%;
+  grid-area: workspace;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-area {
+  display: none;
+}
+
+@media (min-width: 1280px) {
+  .grid-layout {
+    grid-template-columns: 1fr 280px 1fr;
+    grid-template-areas:
+      "chat flow workspace";
+  }
+  
+  .flow-area {
+    grid-area: flow;
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 /* Input styles */
 .input-field {
-  background-color: var(--input-bg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: var(--background-input);
+  border: 1px solid var(--border-color);
   color: var(--text-primary);
   border-radius: 8px;
   padding: 12px;
@@ -143,12 +168,13 @@ body {
 
 .input-field:focus {
   outline: none;
-  border-color: var(--accent-blue);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
 }
 
 /* Button styles */
 .button {
-  background-color: var(--accent-blue);
+  background-color: var(--primary-color);
   color: white;
   border: none;
   border-radius: 8px;
@@ -159,7 +185,7 @@ body {
 }
 
 .button:hover {
-  background-color: #2563eb;
+  background-color: var(--primary-hover);
 }
 
 .button.secondary {
@@ -174,7 +200,7 @@ body {
 .react-flow__node {
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  background: var(--card-bg);
+  background: var(--background-card);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -182,7 +208,7 @@ body {
 
 .react-flow__edge-path {
   stroke-width: 2;
-  stroke: var(--accent-blue);
+  stroke: var(--primary-color);
 }
 
 .react-flow__edge-animated {
@@ -206,6 +232,7 @@ body {
   width: 150px;
   text-align: center;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border-left: 4px solid var(--primary-color);
 }
 
 .agent-node:hover {
@@ -215,22 +242,30 @@ body {
 
 .agent-node.executor {
   background-color: rgba(59, 130, 246, 0.2);
-  border: 1px solid var(--accent-blue);
+  border: 1px solid var(--primary-color);
 }
 
 .agent-node.planner {
   background-color: rgba(139, 92, 246, 0.2);
-  border: 1px solid var(--accent-purple);
+  border: 1px solid var(--primary-color);
 }
 
 .agent-node.code {
   background-color: rgba(16, 185, 129, 0.2);
-  border: 1px solid var(--accent-green);
+  border: 1px solid var(--success-color);
 }
 
 .agent-node.data {
   background-color: rgba(245, 158, 11, 0.2);
-  border: 1px solid var(--warning);
+  border: 1px solid var(--warning-color);
+}
+
+.agent-node.debugger {
+  border-left-color: var(--error-color);
+}
+
+.agent-node.mcp_router {
+  border-left-color: var(--primary-color);
 }
 
 /* Stilovi za WorkEnvironment */
@@ -268,7 +303,146 @@ body {
 
 .tab.active {
   background-color: rgba(255, 255, 255, 0.1);
-  border-bottom: 2px solid var (--accent-blue);
+  border-bottom: 2px solid var(--primary-color);
+}
+
+/* Stilovi za kod i sintaksu */
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+pre {
+  background-color: rgba(17, 24, 39, 0.8);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+}
+
+.code-block {
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.code-block-header {
+  background-color: var(--background-input);
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.code-block-content {
+  padding: 0;
+  margin: 0;
+  overflow-x: auto;
+}
+
+/* Stilovi za input polja */
+input, select, textarea {
+  background-color: var(--background-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+button {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Specifični stilovi za token tracker */
+.token-tracker {
+  background-color: rgba(31, 41, 55, 0.9);
+  backdrop-filter: blur(8px);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Stilovi za scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.7);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.8);
+}
+
+/* Transitions */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 300ms;
+}
+
+.transition-colors {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Utility klase */
+.text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(to right, #3b82f6, #8b5cf6);
+}
+
+.bg-gradient {
+  background-image: linear-gradient(to right, #3b82f6, #8b5cf6);
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Dodatne klase */
+.monaco-editor-view, .terminal-view, .web-view {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.bg-accent-green {
+  background-color: #10b981;
+}
+
+.bg-accent-red {
+  background-color: #ef4444;
+}
+
+.text-accent-blue {
+  color: #3b82f6;
+}
+
+.bg-accent-blue {
+  background-color: #3b82f6;
 }
 
 /* Responsive styles */

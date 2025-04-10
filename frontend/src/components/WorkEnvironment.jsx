@@ -61,7 +61,7 @@ const WorkEnvironment = ({ result }) => {
     // Prioritet za HTML/Markup -> WEB prikaz
     if (languageHint === 'html' || languageHint === 'markup' || /<html|<!DOCTYPE html/i.test(content)) {
        // Dodatna provjera da nije samo npr. Python sa HTML stringom
-       const codeBlockRegex = /```([a-z]*)\\n([\\s\\S]*?)\\n```/i;
+       const codeBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/i;
        const match = content.match(codeBlockRegex);
        if (!match || match[1] === 'html' || match[1] === 'markup') {
            return ViewTypes.WEB;
@@ -77,7 +77,7 @@ const WorkEnvironment = ({ result }) => {
     }
 
     // Provjera za ostale kodne jezike -> MONACO prikaz
-    const codeBlockRegex = /```([a-z]*)\\n([\\s\\S]*?)\\n```/i;
+    const codeBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/i;
     const match = content.match(codeBlockRegex);
     if (match && match[2].trim()) {
       // Provjeri da nije HTML/markup, to ide u WEB
@@ -88,9 +88,9 @@ const WorkEnvironment = ({ result }) => {
 
     // Provjera za kodne paterne ako nema ``` blokova
     const codePatterns = {
-      python: /^(def|class|import|from|if|for|while)\\s+.+:/m,
-      javascript: /^(const|let|var|function|class|import)\\s+.+/m,
-      css: /\\s*\\{\\s*[\\s\\S]*?\\s*\\}/m,
+      python: /^(def|class|import|from|if|for|while)\s+.+:/m,
+      javascript: /^(const|let|var|function|class|import)\s+.+/m,
+      css: /\s*\{\s*[\s\S]*?\s*\}/m,
       sql: /SELECT|FROM|WHERE|INSERT|UPDATE|DELETE/i,
     };
 
@@ -121,9 +121,9 @@ const WorkEnvironment = ({ result }) => {
     setExtractedJs('');
     setFullStackCode(false);
     
-    const htmlBlockRegex = /```(?:html|markup)\\n([\\s\\S]*?)\\n```/gi;
-    const cssBlockRegex = /```(?:css)\\n([\\s\\S]*?)\\n```/gi;
-    const jsBlockRegex = /```(?:javascript|js)\\n([\\s\\S]*?)\\n```/gi;
+    const htmlBlockRegex = /```(?:html|markup)\n([\s\S]*?)\n```/gi;
+    const cssBlockRegex = /```(?:css)\n([\s\S]*?)\n```/gi;
+    const jsBlockRegex = /```(?:javascript|js)\n([\s\S]*?)\n```/gi;
     
     htmlBlockRegex.lastIndex = 0;
     cssBlockRegex.lastIndex = 0;
@@ -145,7 +145,7 @@ const WorkEnvironment = ({ result }) => {
       cssCode = cssMatch[1].trim();
       setExtractedCss(cssCode);
     } else {
-      const styleTagRegex = /<style>([\\s\\S]*?)<\/style>/gi;
+      const styleTagRegex = /<style>([\s\S]*?)<\/style>/gi;
       styleTagRegex.lastIndex = 0;
       const styleMatch = styleTagRegex.exec(content);
       if (styleMatch && styleMatch[1]) {
@@ -158,7 +158,7 @@ const WorkEnvironment = ({ result }) => {
       jsCode = jsMatch[1].trim();
       setExtractedJs(jsCode);
     } else {
-      const scriptTagRegex = /<script>([\\s\\S]*?)<\/script>/gi;
+      const scriptTagRegex = /<script>([\s\S]*?)<\/script>/gi;
       scriptTagRegex.lastIndex = 0;
       const scriptMatch = scriptTagRegex.exec(content);
       if (scriptMatch && scriptMatch[1]) {
@@ -168,26 +168,26 @@ const WorkEnvironment = ({ result }) => {
     }
     
     if (!htmlCode && /<\/?[a-z][\s\S]*>/i.test(content)) {
-        const genericBlockRegex = /```[a-z]*\\n[\\s\\S]*?<\/?[a-z][\s\S]*>[\s\S]*?\\n```/i;
+        const genericBlockRegex = /```[a-z]*\n[\s\S]*?<\/?[a-z][\s\S]*>[\s\S]*?\n```/i;
         genericBlockRegex.lastIndex = 0;
         if (!genericBlockRegex.test(content)) {
              htmlCode = content;
 
             if (!cssCode) {
-                const styleTagRegex = /<style>([\\s\\S]*?)<\/style>/gi;
+                const styleTagRegex = /<style>([\s\S]*?)<\/style>/gi;
                 styleTagRegex.lastIndex = 0;
                 let styleMatch;
                 while ((styleMatch = styleTagRegex.exec(htmlCode)) !== null) {
-                    cssCode += styleMatch[1].trim() + "\\n";
+                    cssCode += styleMatch[1].trim() + "\n";
                 }
                 if (cssCode) setExtractedCss(cssCode);
             }
             if (!jsCode) {
-                const scriptTagRegex = /<script>([\\s\\S]*?)<\/script>/gi;
+                const scriptTagRegex = /<script>([\s\S]*?)<\/script>/gi;
                 scriptTagRegex.lastIndex = 0;
                 let scriptMatch;
                  while ((scriptMatch = scriptTagRegex.exec(htmlCode)) !== null) {
-                    jsCode += scriptMatch[1].trim() + "\\n";
+                    jsCode += scriptMatch[1].trim() + "\n";
                 }
                  if (jsCode) setExtractedJs(jsCode);
             }
@@ -202,7 +202,7 @@ const WorkEnvironment = ({ result }) => {
       return { code: htmlCode, language: 'markup' };
     }
     
-    const codeBlockRegex = /```([a-z]*)\\n([\\s\\S]*?)\\n```/i;
+    const codeBlockRegex = /```([a-z]*)\n([\s\S]*?)\n```/i;
     codeBlockRegex.lastIndex = 0;
     const match = content.match(codeBlockRegex);
     
@@ -218,9 +218,9 @@ const WorkEnvironment = ({ result }) => {
     }
     
     const codePatterns = {
-      python: /^(def|class|import|from|if|for|while)\\s+.+:/m,
-      javascript: /^(const|let|var|function|class|import)\\s+.+/m,
-      css: /\\s*\\{\\s*[\\s\\S]*?\\s*\\}/m,
+      python: /^(def|class|import|from|if|for|while)\s+.+:/m,
+      javascript: /^(const|let|var|function|class|import)\s+.+/m,
+      css: /\s*\{\s*[\s\S]*?\s*\}/m,
       sql: /SELECT|FROM|WHERE|INSERT|UPDATE|DELETE/i,
       bash: /^[$#>].*$/m,
     };
@@ -326,7 +326,7 @@ const WorkEnvironment = ({ result }) => {
         output: 'Otvorite index.html u vašem web pregledniku'
       });
     } else if (language === 'bash') {
-        code.split('\\n').forEach(line => {
+        code.split('\n').forEach(line => {
             if (line.trim()) {
                  commands.push({ command: line, output: '' });
             }
@@ -392,7 +392,7 @@ Molim te vrati kompletan kod s ispravkama, objasni šta je bio problem, i šta s
       setDebugResult(result.response);
       setSessionId(result.session_id);
 
-      const fixedCodeMatch = result.response.match(/```(?:[a-z]*)\\n([\\s\\S]*?)\\n```/i);
+      const fixedCodeMatch = result.response.match(/```(?:[a-z]*)\n([\s\S]*?)\n```/i);
       if (fixedCodeMatch && fixedCodeMatch[1]) {
         setExtractedCode(fixedCodeMatch[1]);
          const langMatch = result.response.match(/```([a-z]*)/i);
@@ -690,7 +690,47 @@ Molim te vrati kompletan kod s ispravkama, objasni šta je bio problem, i šta s
       let formattedContent = '';
       
       if (workflowData.initialResponse) {
-        formattedContent += `# Početni odgovor agenta\n${workflowData.initialResponse}\n\n`;
+        try {
+          // Pokušaj parsirati initialResponse ako je JSON
+          const jsonRegex = /\{[\s\S]*\}/;
+          if (jsonRegex.test(workflowData.initialResponse)) {
+            try {
+              // Ekstrahiramo samo JSON dio
+              const jsonMatch = workflowData.initialResponse.match(jsonRegex);
+              if (jsonMatch) {
+                const jsonObj = JSON.parse(jsonMatch[0]);
+                formattedContent += `# Plan izvršavanja\n\n`;
+                
+                if (jsonObj.title) {
+                  formattedContent += `## ${jsonObj.title}\n\n`;
+                }
+                
+                if (jsonObj.description) {
+                  formattedContent += `${jsonObj.description}\n\n`;
+                }
+                
+                if (jsonObj.steps && Array.isArray(jsonObj.steps)) {
+                  formattedContent += `## Koraci izvršavanja\n\n`;
+                  jsonObj.steps.forEach((step, index) => {
+                    formattedContent += `### ${index + 1}. ${step.title || 'Korak ' + (index + 1)}\n`;
+                    if (step.description) {
+                      formattedContent += `${step.description}\n\n`;
+                    }
+                  });
+                }
+              }
+            } catch (e) {
+              // Ako ne uspije parsiranje, samo prikažemo izvorni tekst
+              formattedContent += `# Plan izvršavanja\n\n${workflowData.initialResponse}\n\n`;
+            }
+          } else {
+            // Nije JSON, prikaži kao običan tekst
+            formattedContent += `# Plan izvršavanja\n\n${workflowData.initialResponse}\n\n`;
+          }
+        } catch (e) {
+          // Ako ne uspije parsing, samo prikažemo izvorni tekst
+          formattedContent += `# Plan izvršavanja\n\n${workflowData.initialResponse}\n\n`;
+        }
       }
       
       if (workflowData.code) {
@@ -719,9 +759,14 @@ Molim te vrati kompletan kod s ispravkama, objasni šta je bio problem, i šta s
         formattedContent += `# Finalni status\n${workflowData.status}\n\n`;
       }
       
+      // Ako nemamo nikakav formatiran sadržaj, ali imamo odgovor bez JSON-a, prikaži odgovor
+      if (!formattedContent.trim() && workflowData.executorAnalysis) {
+        formattedContent = `# Analiza upita\n\n${workflowData.executorAnalysis}\n\n`;
+      }
+      
       // Ako nemamo nikakav formatiran sadržaj, koristimo cijeli JSON
       if (!formattedContent.trim()) {
-        formattedContent = JSON.stringify(workflowData, null, 2);
+        formattedContent = `# Workflow rezultat\n\n\`\`\`json\n${JSON.stringify(workflowData, null, 2)}\n\`\`\``;
       }
       
       // Postavimo formatirani sadržaj za prikaz

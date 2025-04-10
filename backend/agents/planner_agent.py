@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from openai import OpenAI
 
 # Dodamo root direktorij projekta u sys.path
@@ -23,55 +24,116 @@ async def handle(request, previous_messages=None):
             model = getattr(request, "model", cfg["model"])
             temperature = getattr(request, "temperature", cfg["temperature"])
         
-        # Pripremi prompt za planera
+        # Pripremi prompt za planera - pojednostavljeni prompt za brzi odgovor
         plan_prompt = f"""
-Korisnik želi plan za: "{message_content}"
+Napravi plan izvršavanja za korisnikov zahtjev: "{message_content}"
 
-Kao planerski AI agent, napravi detaljan plan razvoja aplikacije. Uključi:
-1. Korake razvoja (npr. dizajn UI, API, logika, testiranje...)
-2. Tehnologije koje će se koristiti
-3. Moguće izazove i rješenja
+Vrati ISKLJUČIVO JSON u sljedećem formatu, bez ikakvih dodatnih objašnjenja:
 
-Plan napiši u jasan i uredan markdown format.
+{{
+  "title": "Naslov plana",
+  "description": "Opis cilja i pristupa",
+  "steps": [
+    {{
+      "title": "Prvi korak",
+      "description": "Opis prvog koraka",
+      "agent": "executor"
+    }},
+    {{
+      "title": "Drugi korak",
+      "description": "Opis drugog koraka",
+      "agent": "code"
+    }}
+  ]
+}}
 
-Počni odmah:
+Uključi 3-5 konkretnih koraka i obavezno koristi samo ove agente: "executor", "code", "planner", "debugger", "data".
 """
         
         # Dodaj prethodne poruke ako postoje
-        messages = [{"role": "system", "content": cfg["system_prompt"]}]
-        
-        if previous_messages:
-            # Formatiramo poruke iz sesije u format pogodan za API
-            for prev_msg in previous_messages:
-                if "agent" in prev_msg and prev_msg["agent"] == "planner":
-                    if "message" in prev_msg:
-                        messages.append({"role": "user", "content": prev_msg["message"]})
-                    if "response" in prev_msg and "response" in prev_msg["response"]:
-                        messages.append({"role": "assistant", "content": prev_msg["response"]["response"]})
-        
-        # Dodaj plan prompt u poruke
+        messages = [{"role": "system", "content": "Kreiraj strukturirani plan izvršavanja u JSON formatu, bez dodatnog teksta."}]
         messages.append({"role": "user", "content": plan_prompt})
         
-        # Kreiranje odgovora
+        # Kreiranje odgovora - s manjim brojem tokena za brži odgovor
         response = client.chat.completions.create(
             model=model,
             temperature=temperature,
-            max_tokens=cfg["max_tokens"],
-            messages=messages
+            max_tokens=800,  # Smanjen broj tokena za brži odgovor
+            messages=messages,
+            response_format={"type": "json_object"}  # Zahtijevamo JSON odgovor
         )
         
         response_text = response.choices[0].message.content
         
+        # Provjerimo je li response_text validan JSON, ako nije formatirajmo ga
+        try:
+            json_obj = json.loads(response_text)
+            formatted_json = json.dumps(json_obj, ensure_ascii=False)
+            final_response = formatted_json
+        except json.JSONDecodeError:
+            # Ako nije validan JSON, pokušamo izdvojiti JSON dio
+            json_pattern = r'({.*})'
+            import re
+            match = re.search(json_pattern, response_text, re.DOTALL)
+            if match:
+                final_response = match.group(1)
+            else:
+                # Ako ne možemo izvući JSON, kreiramo minimalni plan
+                default_plan = {
+                    "title": "Plan izvršavanja za vaš zahtjev",
+                    "description": f"Plan za: {message_content}",
+                    "steps": [
+                        {
+                            "title": "Analiza zahtjeva",
+                            "description": "Analiza korisničkog zahtjeva za utvrđivanje potrebnih akcija",
+                            "agent": "executor"
+                        },
+                        {
+                            "title": "Generiranje koda",
+                            "description": "Kreiranje potrebnog koda za traženu funkcionalnost",
+                            "agent": "code"
+                        },
+                        {
+                            "title": "Testiranje i izvršavanje",
+                            "description": "Provjera funkcionalnosti koda i otklanjanje grešaka",
+                            "agent": "debugger"
+                        }
+                    ]
+                }
+                final_response = json.dumps(default_plan, ensure_ascii=False)
+        
         return {
-            "response": response_text,
+            "response": final_response,
             "flow": ["Planner"],
-            "agents": [response_text],
+            "agents": ["Planner"],
             "type": "text"  # ovo frontend koristi da zna da nije code
         }
     except Exception as e:
+        # Vrati default plan u slučaju greške
+        default_plan = {
+            "title": "Osnovni plan izvršavanja",
+            "description": f"Plan za: {request.get('message', '') if isinstance(request, dict) else getattr(request, 'message', '')}",
+            "steps": [
+                {
+                    "title": "Analiza zahtjeva",
+                    "description": "Analiza korisničkog zahtjeva za utvrđivanje potrebnih akcija",
+                    "agent": "executor"
+                },
+                {
+                    "title": "Generiranje koda",
+                    "description": "Kreiranje potrebnog koda za traženu funkcionalnost",
+                    "agent": "code"
+                },
+                {
+                    "title": "Testiranje i izvršavanje",
+                    "description": "Provjera funkcionalnosti koda i otklanjanje grešaka",
+                    "agent": "debugger"
+                }
+            ]
+        }
         return {
-            "response": f"Planner agent error: {str(e)}",
+            "response": json.dumps(default_plan, ensure_ascii=False),
             "flow": ["Planner"],
-            "agents": [f"Error: {str(e)}"],
+            "agents": ["Error: " + str(e)],
             "type": "text"
         }

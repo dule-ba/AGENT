@@ -41,6 +41,19 @@
       }
     },
     {
+      "name": "OpenAI",
+      "enabled": true,
+      "module": "openai_mcp",
+      "config": {
+        "api_key": "YOUR_OPENAI_API_KEY",
+        "default_model": "gpt-4o",
+        "max_tokens": 4096,
+        "cache_enabled": true,
+        "cache_ttl": 3600,
+        "token_tracking": true
+      }
+    },
+    {
       "name": "ChatSum",
       "enabled": false,
       "module": "chatsum_mcp",
