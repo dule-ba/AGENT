@@ -45,7 +45,7 @@
         "@modelcontextprotocol/server-google-maps"
       ],
       "env": {
-        "GOOGLE_MAPS_API_KEY": "AIzaSyAepVFvxJRSUzKnv3YuO6A93g-08qIg9m0"
+        "GOOGLE_MAPS_API_KEY": "YOUR_API_KEY"
       },
       "disabled": false,
       "autoApprove": []
@@ -56,7 +56,7 @@
         "C:/Users/sahov/Documents/Cline/MCP/google-maps/server.js"
       ],
       "env": {
-        "GOOGLE_MAPS_API_KEY": "AIzaSyAepVFvxJRSUzKnv3YuO6A93g-08qIg9m0"
+        "GOOGLE_MAPS_API_KEY": "YOUR_API_KEY"
       },
       "disabled": false,
       "autoApprove": []
@@ -79,7 +79,7 @@
         "@modelcontextprotocol/server-github"
       ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "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"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_API_KEY"
       },
       "disabled": false,
       "autoApprove": []
