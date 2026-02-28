@@ -303,27 +303,32 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
             </div>
           </div>
         ) : (
-          chatHistory.map((chat, index) => (
+          chatHistory.map((chat, index) => {
+            const messageRole = chat.role || chat.type;
+            const messageText = chat.content || chat.text;
+            const messageKey = chat.id || `${messageRole || 'message'}-${index}`;
+
+            return (
             <div 
-              key={index} 
-              className={`flex ${chat.type === 'user' ? 'justify-end' : 'justify-start'}`}
+              key={messageKey} 
+              className={`flex ${messageRole === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div 
                 className={`max-w-3/4 rounded-lg p-4 ${
-                  chat.type === 'user' 
+                  messageRole === 'user' 
                     ? 'bg-blue-600 text-white' 
                     : 'bg-gray-800 text-gray-100'
                 }`}
               >
-                {chat.type === 'user' ? (
+                {messageRole === 'user' ? (
                   <div>
                     <div className="mb-1 text-xs text-blue-200 opacity-75">Vi</div>
-                    <div>{chat.text}</div>
+                    <div>{messageText}</div>
                   </div>
                 ) : (
                   <div>
                     <div className="mb-1 text-xs text-gray-400 flex items-center">
-                      <span className="capitalize mr-1">{chat.agent || 'Agent'}</span>
+                      <span className="capitalize mr-1">{chat.agent || chat.suggested_agent || 'Agent'}</span>
                       {chat.workflow && (
                         <span className="bg-indigo-800 rounded-full px-2 py-0.5 text-xs ml-2">
                           Workflow
@@ -333,14 +338,15 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
                     <div 
                       className="prose prose-invert max-w-none"
                       dangerouslySetInnerHTML={{
-                        __html: formatCodeBlocks(chat.text)
+                        __html: formatCodeBlocks(messageText)
                       }}
                     />
                   </div>
                 )}
               </div>
             </div>
-          ))
+          );
+          })
         )}
         
         {isLoading && (
