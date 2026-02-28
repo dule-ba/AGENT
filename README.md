@@ -1,14 +1,17 @@
 # 🧠 AI Agent Platform
 
-Višenamjenska AI platforma inspirisana Manus.im, sa modularnim agentima, vizualnim prikazom toka rada, i moćnim interaktivnim UI-jem.
+Višenamjenska AI platforma inspirisana Manus.im, sa modularnim agentima, vizualnim prikazom toka rada i autonomnim sandbox izvršavanjem (kod + shell komande).
 
 ---
 
 ## ✅ Funkcionalnosti
 
-- **Modularni backend agenti**: `Executor`, `Code`, `Planner`, `Data`
-- **OpenAI integracija**: koristi `gpt-4`, `temperature`, `max_tokens`, `system_prompt` konfiguraciju po agentu
-- **Automatski chunking** velikih inputa
+- **Modularni backend agenti**: `Executor`, `Code`, `Planner`, `Data`, `Debugger`
+- **Autonomni režim**: orkestracija `Executor -> Planner -> specijalizovani agenti -> Executor sažetak`
+- **Sandbox izvršavanje koda** (Python/JavaScript) sa timeout i resource limitima
+- **Sandbox shell komande** (`bash`) u izolovanom workspace-u
+- **Persistent sandbox workspace** za višekoračne zadatke (build/test/fix ciklus)
+- **OpenAI + Anthropic MCP podrška**
 - **Vizualni prikaz toka rada agenata** pomoću `React Flow`
 - **Radno okruženje** (terminal / code / web view) za prikaz rezultata
 - **Session Explorer**: prikaz svih koraka agenata
@@ -18,33 +21,25 @@ Višenamjenska AI platforma inspirisana Manus.im, sa modularnim agentima, vizual
 
 ## 📁 Struktura projekta
 
-```
+```text
 .
 ├── backend/
 │   ├── agents/
-│   │   ├── executor_agent.py
-│   │   ├── code_agent.py
-│   │   ├── planner_agent.py
-│   │   └── data_agent.py
 │   ├── config/
-│   │   └── agents_config.json
-│   ├── utils/
-│   │   ├── chunker.py
-│   │   └── session_store.py
+│   ├── endpoints/
 │   ├── schemas/
-│   │   └── chat.py
-│   └── .env
+│   ├── utils/
+│   └── main.py
 ├── frontend/
 │   └── src/
 │       ├── App.jsx
 │       ├── api.js
 │       └── components/
 │           ├── ChatBox.jsx
-│           ├── Sidebar.jsx
 │           ├── TaskFlow.jsx
 │           ├── WorkEnvironment.jsx
 │           └── SessionExplorer.jsx
-└── requirements.txt
+└── README.md
 ```
 
 ---
@@ -56,12 +51,10 @@ Višenamjenska AI platforma inspirisana Manus.im, sa modularnim agentima, vizual
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8080
 ```
 
-- API endpoint: `POST /chat` prima `{"message": "...", "agent": "executor"}`
-
-### 2. Frontend (React + Tailwind)
+### 2. Frontend (React + Vite)
 
 ```bash
 cd frontend
@@ -69,67 +62,106 @@ npm install
 npm run dev
 ```
 
-Otvorite [http://localhost:5173](http://localhost:5173)
+Otvori: [http://localhost:5173](http://localhost:5173)
 
 ---
 
-## ⚙️ Konfiguracija agenata (`agents_config.json`)
+## 🔌 Glavni API endpointi
+
+### Chat i workflow
+
+- `POST /chat`
+  - primjer body:
 
 ```json
 {
-  "code": {
-    "model": "gpt-4",
-    "temperature": 0.5,
-    "max_tokens": 1500,
-    "system_prompt": "You are a coding assistant."
-  },
-  "planner": {
-    "model": "gpt-4",
-    "temperature": 0.7,
-    "max_tokens": 1000,
-    "system_prompt": "You are a planning assistant."
-  },
-  "data": {
-    "model": "gpt-4",
-    "temperature": 0.6,
-    "max_tokens": 1200,
-    "system_prompt": "You are a data assistant."
+  "message": "Napravi TODO app i pokreni testove",
+  "agent": "executor",
+  "auto_process": false,
+  "model": "default",
+  "temperature": 0.7,
+  "mcp_server": "anthropic"
+}
+```
+
+### Izvršavanje koda (sandbox)
+
+- `POST /execute-code`
+  - podržava `python`, `javascript`, `html`
+  - opcije: `sandbox`, `timeout_seconds`, `auto_debug`
+
+```json
+{
+  "code": "print('hello')",
+  "language": "python",
+  "mode": "script",
+  "sandbox": true,
+  "timeout_seconds": 8,
+  "auto_debug": true
+}
+```
+
+### Izvršavanje shell komandi u sandboxu
+
+- `POST /execute-command-sandbox`
+  - izvršava komandu preko `bash -lc` u izolovanom direktoriju
+  - podržava:
+    - `files` (pre-populate fajlova)
+    - `persist_workspace` + `workspace_id` (nastavak rada kroz više komandi)
+
+```json
+{
+  "command": "npm test",
+  "timeout_seconds": 20,
+  "sandbox": true,
+  "persist_workspace": true,
+  "workspace_id": null,
+  "files": {
+    "package.json": "{\"name\":\"demo\",\"scripts\":{\"test\":\"echo ok\"}}"
   }
 }
 ```
 
----
-
-## 🔁 Interaktivni tok rada
-
-1. Unesi poruku u ChatBox
-2. Executor delegira zadatak odgovarajućem agentu
-3. Agent obradi i odgovori
-4. TaskFlow prikazuje dijagram toka
-5. Klikni na čvor → vidi odgovor + ponovi rad
-6. Uredi prompt i uporedi razlike (diff)
+- `DELETE /sandbox-workspace/{workspace_id}`
+  - ručno čišćenje persistent workspace-a
 
 ---
 
-## 📦 TODO / buduće opcije
+## 🤖 Autonomni režim (frontend)
 
-- Upload CSV/PDF fajlova i vizualizacija
-- RAG agent za rad sa dokumentima
-- Višekorisnički sistem (login + tokeni)
-- Export sesije u PDF/JSON
-- Podrška za više različitih LLM pružalaca usluga (Claude, Mistral, Llama, itd.)
-- Sistem za automatsko testiranje ponašanja agenata i validaciju rezultata
-- Implementacija "pamćenja" agenata između sesija (kontinuitet razgovora)
-- Metrike performansi agenata i vizualni dashboard za analitiku
+U `ChatBox` postoji toggle **Autonomni režim**:
+
+1. korisnik pošalje cilj
+2. `Executor` interpretira zadatak
+3. `Planner` generiše korake
+4. `Code/Data` agenti rješavaju korake
+5. ako odgovor sadrži fenced shell blok (```bash ... ```), komanda se izvršava u sandboxu
+6. `Executor` vrati završni sažetak
+
+Napomena: autonomni workflow automatski clean-up-a workspace na kraju toka.
+
+---
+
+## 🔒 Sigurnosne napomene
+
+- Sandbox ovdje je **lightweight process isolation** (timeout + rlimits + temp workspace), nije full VM-level izolacija.
+- Za produkciju preporučeno:
+  - odvojeni worker/container runtime
+  - network egress restrikcije
+  - seccomp/apparmor profile
+  - per-user quota i audit log
+
+---
+
+## 📦 Roadmap
+
+- Session-bound persistent workspace kroz cijelu korisničku sesiju
+- Snapshot/restore sandbox stanja
+- Vizualni prikaz shell koraka i izlaza u TaskFlow
+- Sigurnosna politika po tenant-u (RBAC + resource budget)
 
 ---
 
 ## 🧠 Vizija
 
-> “Ne pravimo samo chat — pravimo alat koji **radi s tobom**, razumije tok posla, pamti tvoje korake, i pomaže kao pravi digitalni inženjer.”
-
----
-
-## 🧑‍💻 Autor: [Tvoj Projekat — Agent Sistem za Sve]
-
-> Inspiriše te Manus? Onda je ovo tvoj prvi korak ka nečemu još moćnijem.
+> “Ne pravimo samo chat — pravimo alat koji radi s tobom, izvršava korake autonomno i pouzdano u izolovanom okruženju.”
