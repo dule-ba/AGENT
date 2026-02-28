@@ -826,6 +826,54 @@ export const getTokenUsageStats = async (sessionId = null) => {
   }
 };
 
+
+
+/**
+ * Izvrši shell komandu u backend sandboxu (Ubuntu/bash okruženje unutar temp direktorija).
+ * @param {string} command
+ * @param {Object} options
+ * @returns {Promise<Object>}
+ */
+export const executeSandboxCommand = async (command, options = {}) => {
+  const { timeoutSeconds = 15, sandbox = true, files = null } = options;
+
+  const response = await fetch(`${API_BASE_URL}/execute-command-sandbox`, {
+    method: 'POST',
+    mode: 'cors',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      command,
+      timeout_seconds: timeoutSeconds,
+      sandbox,
+      files
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+};
+
+const extractShellCommands = (text = '') => {
+  const commands = [];
+  const blockRegex = /```(?:bash|sh|shell)\n([\s\S]*?)```/gi;
+  let match;
+
+  while ((match = blockRegex.exec(text)) !== null) {
+    const cmd = match[1].trim();
+    if (cmd) {
+      commands.push(cmd);
+    }
+  }
+
+  return commands;
+};
+
 /**
  * Autonomni ciklus: executor -> planner -> specijalizirani agent(i) -> executor sažetak.
  * @param {string} message
@@ -878,6 +926,35 @@ ORIGINALNI ZADATAK: ${message}`;
       response: stepResponse.response,
       plan_step: step
     });
+
+    const shellCommands = extractShellCommands(stepResponse.response);
+    for (const command of shellCommands) {
+      try {
+        const commandResult = await executeSandboxCommand(command, {
+          timeoutSeconds: options.timeoutSeconds || 20,
+          sandbox: options.sandbox !== false
+        });
+
+        log.push({
+          agent: 'sandbox-shell',
+          plan_step: step,
+          command,
+          command_result: commandResult
+        });
+      } catch (commandError) {
+        log.push({
+          agent: 'sandbox-shell',
+          plan_step: step,
+          command,
+          command_result: {
+            status: 'error',
+            stderr: commandError.message,
+            exit_code: 1,
+            stdout: ''
+          }
+        });
+      }
+    }
   }
 
   const summaryPrompt = `Na osnovu kompletnog dnevnika rada, vrati finalni odgovor korisniku.

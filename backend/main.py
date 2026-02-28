@@ -12,7 +12,7 @@ import traceback
 import subprocess
 import tempfile
 import base64
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 
 # Dodaj glavni direktorij u sys.path
@@ -104,6 +104,19 @@ class CodeExecutionResponse(BaseModel):
     output: str
     error: Optional[str] = None
     imageBase64: Optional[str] = None
+    status: str
+
+
+class SandboxCommandRequest(BaseModel):
+    command: str
+    timeout_seconds: Optional[int] = 15
+    sandbox: Optional[bool] = True
+    files: Optional[Dict[str, str]] = None
+
+class SandboxCommandResponse(BaseModel):
+    stdout: str
+    stderr: str
+    exit_code: int
     status: str
 
 # Prošireni model za chat upit s auto_process
@@ -370,6 +383,78 @@ GREŠKA:
         result["status"] = "error"
 
     return result
+
+
+@app.post("/execute-command-sandbox", response_model=SandboxCommandResponse)
+async def execute_command_sandbox(request: SandboxCommandRequest):
+    timeout_seconds = max(1, min(request.timeout_seconds or 15, 60))
+
+    def _sandbox_preexec():
+        if os.name != "posix":
+            return
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_CPU, (timeout_seconds, timeout_seconds + 1))
+            resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 10 * 1024 * 1024))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
+            resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+        except Exception:
+            pass
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="agent_shell_sandbox_") as sandbox_dir:
+            if request.files:
+                for rel_path, content in request.files.items():
+                    normalized = os.path.normpath(rel_path).lstrip("/")
+                    abs_path = os.path.abspath(os.path.join(sandbox_dir, normalized))
+                    if not abs_path.startswith(os.path.abspath(sandbox_dir)):
+                        return {
+                            "stdout": "",
+                            "stderr": f"Nedozvoljena putanja: {rel_path}",
+                            "exit_code": 1,
+                            "status": "error"
+                        }
+                    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+                    with open(abs_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+
+            env = {
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": sandbox_dir,
+                "TMPDIR": sandbox_dir,
+            }
+
+            completed = subprocess.run(
+                ["bash", "-lc", request.command],
+                cwd=sandbox_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+                env=env,
+                preexec_fn=_sandbox_preexec if request.sandbox else None
+            )
+
+            return {
+                "stdout": completed.stdout,
+                "stderr": completed.stderr,
+                "exit_code": completed.returncode,
+                "status": "success" if completed.returncode == 0 else "error"
+            }
+    except subprocess.TimeoutExpired:
+        return {
+            "stdout": "",
+            "stderr": f"Command timeout after {timeout_seconds}s",
+            "exit_code": 124,
+            "status": "error"
+        }
+    except Exception as e:
+        return {
+            "stdout": "",
+            "stderr": str(e),
+            "exit_code": 1,
+            "status": "error"
+        }
 
 @app.get("/sessions")
 async def list_sessions():
