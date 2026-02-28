@@ -71,7 +71,7 @@ export const sendChatMessage = async (message, agent = 'executor', options = {})
 
 // Izvršavanje koda s automatskim ispravljanjem grešaka
 export const executeCode = async (code, language, mode = 'script', sessionId = null, options = {}) => {
-  const { autoDebug = true, mcpServer = 'anthropic' } = options;
+  const { autoDebug = true, mcpServer = 'anthropic', sandbox = true, timeoutSeconds = 8 } = options;
   
   try {
     // Koristi trenutni session ID ili onaj koji je prosljeđen
@@ -90,7 +90,9 @@ export const executeCode = async (code, language, mode = 'script', sessionId = n
         mode,
         sessionId: activeSessionId,
         auto_debug: autoDebug, // Za automatsko pokretanje debug procesa ako se pojavi greška
-        mcp_server: mcpServer
+        mcp_server: mcpServer,
+        sandbox,
+        timeout_seconds: timeoutSeconds
       }),
     });
 
