@@ -12,7 +12,7 @@ import traceback
 import subprocess
 import tempfile
 import base64
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from pydantic import BaseModel
 
 # Dodaj glavni direktorij u sys.path
@@ -79,6 +79,8 @@ app.include_router(anthropic_router)
 app.include_router(openai_router)
 
 # Mapiraj agente za direktno usmjeravanje
+SANDBOX_WORKSPACES: Dict[str, str] = {}
+
 agent_map = {
     "executor": executor_agent,
     "code": code_agent,
@@ -112,12 +114,15 @@ class SandboxCommandRequest(BaseModel):
     timeout_seconds: Optional[int] = 15
     sandbox: Optional[bool] = True
     files: Optional[Dict[str, str]] = None
+    workspace_id: Optional[str] = None
+    persist_workspace: Optional[bool] = False
 
 class SandboxCommandResponse(BaseModel):
     stdout: str
     stderr: str
     exit_code: int
     status: str
+    workspace_id: Optional[str] = None
 
 # Prošireni model za chat upit s auto_process
 class ChatRequestExtended(ChatRequest):
@@ -402,59 +407,103 @@ async def execute_command_sandbox(request: SandboxCommandRequest):
         except Exception:
             pass
 
+    workspace_id = request.workspace_id
+    workspace_dir = None
+    ephemeral_dir = None
+
     try:
-        with tempfile.TemporaryDirectory(prefix="agent_shell_sandbox_") as sandbox_dir:
-            if request.files:
-                for rel_path, content in request.files.items():
-                    normalized = os.path.normpath(rel_path).lstrip("/")
-                    abs_path = os.path.abspath(os.path.join(sandbox_dir, normalized))
-                    if not abs_path.startswith(os.path.abspath(sandbox_dir)):
-                        return {
-                            "stdout": "",
-                            "stderr": f"Nedozvoljena putanja: {rel_path}",
-                            "exit_code": 1,
-                            "status": "error"
-                        }
-                    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-                    with open(abs_path, "w", encoding="utf-8") as f:
-                        f.write(content)
+        if request.persist_workspace:
+            if workspace_id:
+                workspace_dir = SANDBOX_WORKSPACES.get(workspace_id)
+                if not workspace_dir:
+                    return {
+                        "stdout": "",
+                        "stderr": f"Workspace ne postoji: {workspace_id}",
+                        "exit_code": 1,
+                        "status": "error",
+                        "workspace_id": workspace_id
+                    }
+            else:
+                workspace_id = str(uuid.uuid4())
+                workspace_dir = tempfile.mkdtemp(prefix="agent_shell_workspace_")
+                SANDBOX_WORKSPACES[workspace_id] = workspace_dir
+        else:
+            ephemeral_dir = tempfile.TemporaryDirectory(prefix="agent_shell_sandbox_")
+            workspace_dir = ephemeral_dir.name
 
-            env = {
-                "PATH": os.environ.get("PATH", ""),
-                "HOME": sandbox_dir,
-                "TMPDIR": sandbox_dir,
-            }
+        if request.files:
+            for rel_path, content in request.files.items():
+                normalized = os.path.normpath(rel_path).lstrip("/")
+                abs_path = os.path.abspath(os.path.join(workspace_dir, normalized))
+                if not abs_path.startswith(os.path.abspath(workspace_dir)):
+                    return {
+                        "stdout": "",
+                        "stderr": f"Nedozvoljena putanja: {rel_path}",
+                        "exit_code": 1,
+                        "status": "error",
+                        "workspace_id": workspace_id
+                    }
+                os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+                with open(abs_path, "w", encoding="utf-8") as f:
+                    f.write(content)
 
-            completed = subprocess.run(
-                ["bash", "-lc", request.command],
-                cwd=sandbox_dir,
-                capture_output=True,
-                text=True,
-                timeout=timeout_seconds,
-                env=env,
-                preexec_fn=_sandbox_preexec if request.sandbox else None
-            )
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "HOME": workspace_dir,
+            "TMPDIR": workspace_dir,
+        }
 
-            return {
-                "stdout": completed.stdout,
-                "stderr": completed.stderr,
-                "exit_code": completed.returncode,
-                "status": "success" if completed.returncode == 0 else "error"
-            }
+        completed = subprocess.run(
+            ["bash", "-lc", request.command],
+            cwd=workspace_dir,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            env=env,
+            preexec_fn=_sandbox_preexec if request.sandbox else None
+        )
+
+        return {
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "exit_code": completed.returncode,
+            "status": "success" if completed.returncode == 0 else "error",
+            "workspace_id": workspace_id
+        }
     except subprocess.TimeoutExpired:
         return {
             "stdout": "",
             "stderr": f"Command timeout after {timeout_seconds}s",
             "exit_code": 124,
-            "status": "error"
+            "status": "error",
+            "workspace_id": workspace_id
         }
     except Exception as e:
         return {
             "stdout": "",
             "stderr": str(e),
             "exit_code": 1,
-            "status": "error"
+            "status": "error",
+            "workspace_id": workspace_id
         }
+    finally:
+        if ephemeral_dir:
+            ephemeral_dir.cleanup()
+
+
+@app.delete("/sandbox-workspace/{workspace_id}")
+async def cleanup_sandbox_workspace(workspace_id: str):
+    workspace_dir = SANDBOX_WORKSPACES.pop(workspace_id, None)
+    if not workspace_dir:
+        raise HTTPException(status_code=404, detail=f"Workspace ne postoji: {workspace_id}")
+
+    try:
+        import shutil
+        shutil.rmtree(workspace_dir, ignore_errors=True)
+    except Exception:
+        pass
+
+    return {"status": "deleted", "workspace_id": workspace_id}
 
 @app.get("/sessions")
 async def list_sessions():

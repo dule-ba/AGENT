@@ -835,7 +835,7 @@ export const getTokenUsageStats = async (sessionId = null) => {
  * @returns {Promise<Object>}
  */
 export const executeSandboxCommand = async (command, options = {}) => {
-  const { timeoutSeconds = 15, sandbox = true, files = null } = options;
+  const { timeoutSeconds = 15, sandbox = true, files = null, workspaceId = null, persistWorkspace = false } = options;
 
   const response = await fetch(`${API_BASE_URL}/execute-command-sandbox`, {
     method: 'POST',
@@ -848,8 +848,33 @@ export const executeSandboxCommand = async (command, options = {}) => {
       command,
       timeout_seconds: timeoutSeconds,
       sandbox,
-      files
+      files,
+      workspace_id: workspaceId,
+      persist_workspace: persistWorkspace
     }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+};
+
+
+
+/**
+ * Obriši persistent sandbox workspace.
+ * @param {string} workspaceId
+ * @returns {Promise<Object>}
+ */
+export const cleanupSandboxWorkspace = async (workspaceId) => {
+  const response = await fetch(`${API_BASE_URL}/sandbox-workspace/${workspaceId}`, {
+    method: 'DELETE',
+    mode: 'cors',
+    headers: {
+      'Accept': 'application/json'
+    }
   });
 
   if (!response.ok) {
@@ -883,6 +908,7 @@ const extractShellCommands = (text = '') => {
 export const executeAutonomousWorkflow = async (message, options = {}) => {
   const maxSteps = options.maxSteps || 3;
   const log = [];
+  let workspaceId = null;
 
   const executorResponse = await sendChatMessage(message, 'executor', { ...options });
   log.push({
@@ -932,8 +958,14 @@ ORIGINALNI ZADATAK: ${message}`;
       try {
         const commandResult = await executeSandboxCommand(command, {
           timeoutSeconds: options.timeoutSeconds || 20,
-          sandbox: options.sandbox !== false
+          sandbox: options.sandbox !== false,
+          workspaceId,
+          persistWorkspace: true
         });
+
+        if (commandResult.workspace_id) {
+          workspaceId = commandResult.workspace_id;
+        }
 
         log.push({
           agent: 'sandbox-shell',
@@ -969,6 +1001,19 @@ Originalni upit: ${message}`;
     response: summaryResponse.response,
     phase: 'summary'
   });
+
+  if (workspaceId) {
+    try {
+      await cleanupSandboxWorkspace(workspaceId);
+    } catch (cleanupError) {
+      log.push({
+        agent: 'sandbox-shell',
+        phase: 'workspace_cleanup',
+        workspace_id: workspaceId,
+        error: cleanupError.message
+      });
+    }
+  }
 
   return {
     mode: 'autonomous',
