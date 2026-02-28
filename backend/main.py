@@ -79,6 +79,8 @@ app.include_router(anthropic_router)
 app.include_router(openai_router)
 
 # Mapiraj agente za direktno usmjeravanje
+SANDBOX_WORKSPACES: Dict[str, str] = {}
+
 agent_map = {
     "executor": executor_agent,
     "code": code_agent,
@@ -97,12 +99,30 @@ class CodeExecutionRequest(BaseModel):
     auto_debug: Optional[bool] = False
     mcp_server: Optional[str] = "anthropic"
     auto_model_selection: Optional[bool] = False
+    sandbox: Optional[bool] = True
+    timeout_seconds: Optional[int] = 8
 
 class CodeExecutionResponse(BaseModel):
     output: str
     error: Optional[str] = None
     imageBase64: Optional[str] = None
     status: str
+
+
+class SandboxCommandRequest(BaseModel):
+    command: str
+    timeout_seconds: Optional[int] = 15
+    sandbox: Optional[bool] = True
+    files: Optional[Dict[str, str]] = None
+    workspace_id: Optional[str] = None
+    persist_workspace: Optional[bool] = False
+
+class SandboxCommandResponse(BaseModel):
+    stdout: str
+    stderr: str
+    exit_code: int
+    status: str
+    workspace_id: Optional[str] = None
 
 # Prošireni model za chat upit s auto_process
 class ChatRequestExtended(ChatRequest):
@@ -111,6 +131,8 @@ class ChatRequestExtended(ChatRequest):
     temperature: Optional[float] = 0.7
     mcp_server: Optional[str] = "anthropic"
     auto_model_selection: Optional[bool] = False
+    sandbox: Optional[bool] = True
+    timeout_seconds: Optional[int] = 8
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequestExtended):
@@ -201,86 +223,124 @@ async def chat_endpoint(request: ChatRequestExtended):
 @app.post("/execute-code", response_model=CodeExecutionResponse)
 async def execute_code(request: CodeExecutionRequest):
     """
-    Stvarno izvršava kod i vraća rezultat.
+    Izvršava kod u izoliranom privremenom direktoriju (sandbox-lite) i vraća rezultat.
     Podržava Python, JavaScript i HTML.
     """
-    
+
     result = {
         "output": "",
         "error": None,
         "imageBase64": None,
         "status": "success"
     }
-    
-    # Provjeri da li treba automatski odabrati model za debug
+
     mcp_server = request.mcp_server
     auto_model_selection = request.auto_model_selection
-    
+    timeout_seconds = max(1, min(request.timeout_seconds, 30))
+
+    def _sandbox_preexec():
+        if os.name != "posix":
+            return
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_CPU, (timeout_seconds, timeout_seconds + 1))
+            resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (5 * 1024 * 1024, 5 * 1024 * 1024))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+            resource.setrlimit(resource.RLIMIT_NPROC, (32, 32))
+        except Exception:
+            pass
+
+    def _run_code_subprocess(code: str, command: list[str], suffix: str):
+        with tempfile.TemporaryDirectory(prefix="agent_sandbox_") as sandbox_dir:
+            file_path = os.path.join(sandbox_dir, f"main{suffix}")
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(code)
+
+            env = {
+                "PATH": os.environ.get("PATH", ""),
+                "PYTHONNOUSERSITE": "1",
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "HOME": sandbox_dir,
+                "TMPDIR": sandbox_dir
+            }
+
+            completed = subprocess.run(
+                command + [file_path],
+                capture_output=True,
+                text=True,
+                cwd=sandbox_dir,
+                timeout=timeout_seconds,
+                env=env,
+                preexec_fn=_sandbox_preexec if request.sandbox else None
+            )
+            return completed
+
+    async def _attach_debug_suggestion(lang_label: str):
+        debug_message = f"""Debug ovaj {lang_label} kod i ispravi greške:
+```{request.language}
+{request.code}
+```
+
+GREŠKA:
+{result['error']}"""
+
+        debug_request_data = {
+            "message": debug_message,
+            "agent": "debugger",
+            "auto_process": False,
+            "mcp_server": mcp_server
+        }
+
+        if auto_model_selection:
+            router_result = await mcp_router_agent(debug_request_data)
+            model_rec = router_result.get("model_recommendation", {})
+            debug_request_data["model"] = model_rec.get("model", "default")
+            debug_request_data["temperature"] = model_rec.get("temperature", 0.2)
+
+        debug_request = ChatRequestExtended(**debug_request_data)
+        debug_response = await debugger_agent(debug_request.dict())
+        result["debug_suggestion"] = debug_response["response"]
+        if auto_model_selection:
+            result["debug_model_used"] = debug_request_data.get("model", "default")
+
     try:
-        # Za Python kod
         if request.language.lower() in ["python", "py"]:
             if request.mode == "script":
-                # Izvršavanje običnog Python koda
-                f = io.StringIO()
-                with contextlib.redirect_stdout(f):
-                    try:
-                        exec(request.code)
-                        result["output"] = f.getvalue()
-                    except Exception as e:
-                        result["error"] = str(e) + "\n" + traceback.format_exc()
-                        result["status"] = "error"
-                        
-                        # Automatsko ispravljanje koda ako je zatraženo
-                        if request.auto_debug:
-                            debug_message = f"Debug ovaj Python kod i ispravi greške:\n```python\n{request.code}\n```\n\nGREŠKA:\n{result['error']}"
-                            
-                            debug_request_data = {
-                                "message": debug_message,
-                                "agent": "debugger",
-                                "auto_process": False,
-                                "mcp_server": mcp_server
-                            }
-                            
-                            # Ako je uključen automatski odabir modela, koristi router
-                            if auto_model_selection:
-                                router_result = await mcp_router_agent(debug_request_data)
-                                model_rec = router_result.get("model_recommendation", {})
-                                debug_request_data["model"] = model_rec.get("model", "default")
-                                debug_request_data["temperature"] = model_rec.get("temperature", 0.2)
-                            
-                            debug_request = ChatRequestExtended(**debug_request_data)
-                            debug_response = await debugger_agent(debug_request.dict())
-                            
-                            # Dodaj debug prijedlog u odgovor
-                            result["debug_suggestion"] = debug_response["response"]
-                            if auto_model_selection:
-                                result["debug_model_used"] = debug_request_data.get("model", "default")
-                
+                try:
+                    process = _run_code_subprocess(request.code, ["python"], ".py")
+                    result["output"] = process.stdout
+                    if process.stderr:
+                        result["error"] = process.stderr
+                        result["status"] = "error" if process.returncode != 0 else "success"
+                        if request.auto_debug and process.returncode != 0:
+                            await _attach_debug_suggestion("Python")
+                except subprocess.TimeoutExpired:
+                    result["error"] = f"Execution timeout after {timeout_seconds}s"
+                    result["status"] = "error"
+                except Exception as e:
+                    result["error"] = str(e)
+                    result["status"] = "error"
+
             elif request.mode == "gui":
-                # Za GUI aplikacije pišemo kod u privremeni fajl
                 with tempfile.NamedTemporaryFile(suffix='.py', delete=False) as temp:
                     temp.write(request.code.encode())
                     temp_path = temp.name
-                
+
                 try:
-                    # Pokrenemo Python skriptu u odvojenom procesu
                     process = subprocess.Popen(
                         ["python", temp_path],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         text=True
                     )
-                    
-                    # Čekamo kratko vrijeme da se GUI pokrene
+
                     import time
                     time.sleep(2)
-                    
-                    # Pokušaj napraviti screenshot (potreban je PIL/Pillow)
+
                     try:
                         from PIL import ImageGrab
                         screenshot = ImageGrab.grab()
-                        
-                        # Konvertiramo u base64 za slanje na frontend
                         buffered = io.BytesIO()
                         screenshot.save(buffered, format="PNG")
                         result["imageBase64"] = base64.b64encode(buffered.getvalue()).decode()
@@ -288,87 +348,162 @@ async def execute_code(request: CodeExecutionRequest):
                         result["error"] = "Screenshot nije moguć - PIL/Pillow nije instaliran"
                     except Exception as e:
                         result["error"] = f"Problem sa screenshotom: {str(e)}"
-                    
-                    # Dohvatimo izlaz procesa
+
                     stdout, stderr = process.communicate(timeout=5)
                     result["output"] = stdout
                     if stderr:
                         result["error"] = stderr
-                    
-                    # Zatvorimo proces
+
                     process.terminate()
                 except Exception as e:
                     result["error"] = str(e)
                     result["status"] = "error"
                 finally:
-                    # Obrišimo privremeni fajl
                     try:
                         os.unlink(temp_path)
                     except:
                         pass
-                
-        # Za JavaScript kod
+
         elif request.language.lower() in ["javascript", "js"]:
-            # JavaScript izvršavanje kroz Node.js
-            with tempfile.NamedTemporaryFile(suffix='.js', delete=False) as temp:
-                temp.write(request.code.encode())
-                temp_path = temp.name
-            
             try:
-                process = subprocess.run(
-                    ["node", temp_path], 
-                    capture_output=True, 
-                    text=True
-                )
+                process = _run_code_subprocess(request.code, ["node"], ".js")
                 result["output"] = process.stdout
                 if process.stderr:
                     result["error"] = process.stderr
                     if process.returncode != 0:
                         result["status"] = "error"
-                        
-                        # Automatsko ispravljanje koda ako je zatraženo
                         if request.auto_debug:
-                            debug_message = f"Debug ovaj JavaScript kod i ispravi greške:\n```javascript\n{request.code}\n```\n\nGREŠKA:\n{result['error']}"
-                            
-                            debug_request_data = {
-                                "message": debug_message,
-                                "agent": "debugger",
-                                "auto_process": False,
-                                "mcp_server": mcp_server
-                            }
-                            
-                            # Ako je uključen automatski odabir modela, koristi router
-                            if auto_model_selection:
-                                router_result = await mcp_router_agent(debug_request_data)
-                                model_rec = router_result.get("model_recommendation", {})
-                                debug_request_data["model"] = model_rec.get("model", "default")
-                                debug_request_data["temperature"] = model_rec.get("temperature", 0.2)
-                            
-                            debug_request = ChatRequestExtended(**debug_request_data)
-                            debug_response = await debugger_agent(debug_request.dict())
-                            
-                            # Dodaj debug prijedlog u odgovor
-                            result["debug_suggestion"] = debug_response["response"]
-                            if auto_model_selection:
-                                result["debug_model_used"] = debug_request_data.get("model", "default")
+                            await _attach_debug_suggestion("JavaScript")
+            except subprocess.TimeoutExpired:
+                result["error"] = f"Execution timeout after {timeout_seconds}s"
+                result["status"] = "error"
             except Exception as e:
                 result["error"] = str(e)
                 result["status"] = "error"
-            finally:
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass
-                
-        # Za HTML kod
+
         elif request.language.lower() in ["html", "markup"]:
-            # HTML možemo vratiti direktno za prikaz u iframeu
             result["output"] = request.code
     except Exception as e:
         result["error"] = str(e) + "\n" + traceback.format_exc()
         result["status"] = "error"
-    
+
     return result
+
+
+@app.post("/execute-command-sandbox", response_model=SandboxCommandResponse)
+async def execute_command_sandbox(request: SandboxCommandRequest):
+    timeout_seconds = max(1, min(request.timeout_seconds or 15, 60))
+
+    def _sandbox_preexec():
+        if os.name != "posix":
+            return
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_CPU, (timeout_seconds, timeout_seconds + 1))
+            resource.setrlimit(resource.RLIMIT_AS, (1024 * 1024 * 1024, 1024 * 1024 * 1024))
+            resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 10 * 1024 * 1024))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
+            resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+        except Exception:
+            pass
+
+    workspace_id = request.workspace_id
+    workspace_dir = None
+    ephemeral_dir = None
+
+    try:
+        if request.persist_workspace:
+            if workspace_id:
+                workspace_dir = SANDBOX_WORKSPACES.get(workspace_id)
+                if not workspace_dir:
+                    return {
+                        "stdout": "",
+                        "stderr": f"Workspace ne postoji: {workspace_id}",
+                        "exit_code": 1,
+                        "status": "error",
+                        "workspace_id": workspace_id
+                    }
+            else:
+                workspace_id = str(uuid.uuid4())
+                workspace_dir = tempfile.mkdtemp(prefix="agent_shell_workspace_")
+                SANDBOX_WORKSPACES[workspace_id] = workspace_dir
+        else:
+            ephemeral_dir = tempfile.TemporaryDirectory(prefix="agent_shell_sandbox_")
+            workspace_dir = ephemeral_dir.name
+
+        if request.files:
+            for rel_path, content in request.files.items():
+                normalized = os.path.normpath(rel_path).lstrip("/")
+                abs_path = os.path.abspath(os.path.join(workspace_dir, normalized))
+                if not abs_path.startswith(os.path.abspath(workspace_dir)):
+                    return {
+                        "stdout": "",
+                        "stderr": f"Nedozvoljena putanja: {rel_path}",
+                        "exit_code": 1,
+                        "status": "error",
+                        "workspace_id": workspace_id
+                    }
+                os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+                with open(abs_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "HOME": workspace_dir,
+            "TMPDIR": workspace_dir,
+        }
+
+        completed = subprocess.run(
+            ["bash", "-lc", request.command],
+            cwd=workspace_dir,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            env=env,
+            preexec_fn=_sandbox_preexec if request.sandbox else None
+        )
+
+        return {
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "exit_code": completed.returncode,
+            "status": "success" if completed.returncode == 0 else "error",
+            "workspace_id": workspace_id
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "stdout": "",
+            "stderr": f"Command timeout after {timeout_seconds}s",
+            "exit_code": 124,
+            "status": "error",
+            "workspace_id": workspace_id
+        }
+    except Exception as e:
+        return {
+            "stdout": "",
+            "stderr": str(e),
+            "exit_code": 1,
+            "status": "error",
+            "workspace_id": workspace_id
+        }
+    finally:
+        if ephemeral_dir:
+            ephemeral_dir.cleanup()
+
+
+@app.delete("/sandbox-workspace/{workspace_id}")
+async def cleanup_sandbox_workspace(workspace_id: str):
+    workspace_dir = SANDBOX_WORKSPACES.pop(workspace_id, None)
+    if not workspace_dir:
+        raise HTTPException(status_code=404, detail=f"Workspace ne postoji: {workspace_id}")
+
+    try:
+        import shutil
+        shutil.rmtree(workspace_dir, ignore_errors=True)
+    except Exception:
+        pass
+
+    return {"status": "deleted", "workspace_id": workspace_id}
 
 @app.get("/sessions")
 async def list_sessions():

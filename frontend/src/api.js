@@ -71,7 +71,7 @@ export const sendChatMessage = async (message, agent = 'executor', options = {})
 
 // Izvršavanje koda s automatskim ispravljanjem grešaka
 export const executeCode = async (code, language, mode = 'script', sessionId = null, options = {}) => {
-  const { autoDebug = true, mcpServer = 'anthropic' } = options;
+  const { autoDebug = true, mcpServer = 'anthropic', sandbox = true, timeoutSeconds = 8 } = options;
   
   try {
     // Koristi trenutni session ID ili onaj koji je prosljeđen
@@ -90,7 +90,9 @@ export const executeCode = async (code, language, mode = 'script', sessionId = n
         mode,
         sessionId: activeSessionId,
         auto_debug: autoDebug, // Za automatsko pokretanje debug procesa ako se pojavi greška
-        mcp_server: mcpServer
+        mcp_server: mcpServer,
+        sandbox,
+        timeout_seconds: timeoutSeconds
       }),
     });
 
@@ -822,4 +824,202 @@ export const getTokenUsageStats = async (sessionId = null) => {
     console.error('Error fetching token usage stats:', error);
     throw error;
   }
+};
+
+
+
+/**
+ * Izvrši shell komandu u backend sandboxu (Ubuntu/bash okruženje unutar temp direktorija).
+ * @param {string} command
+ * @param {Object} options
+ * @returns {Promise<Object>}
+ */
+export const executeSandboxCommand = async (command, options = {}) => {
+  const { timeoutSeconds = 15, sandbox = true, files = null, workspaceId = null, persistWorkspace = false } = options;
+
+  const response = await fetch(`${API_BASE_URL}/execute-command-sandbox`, {
+    method: 'POST',
+    mode: 'cors',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      command,
+      timeout_seconds: timeoutSeconds,
+      sandbox,
+      files,
+      workspace_id: workspaceId,
+      persist_workspace: persistWorkspace
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+};
+
+
+
+/**
+ * Obriši persistent sandbox workspace.
+ * @param {string} workspaceId
+ * @returns {Promise<Object>}
+ */
+export const cleanupSandboxWorkspace = async (workspaceId) => {
+  const response = await fetch(`${API_BASE_URL}/sandbox-workspace/${workspaceId}`, {
+    method: 'DELETE',
+    mode: 'cors',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+
+  return await response.json();
+};
+
+const extractShellCommands = (text = '') => {
+  const commands = [];
+  const blockRegex = /```(?:bash|sh|shell)\n([\s\S]*?)```/gi;
+  let match;
+
+  while ((match = blockRegex.exec(text)) !== null) {
+    const cmd = match[1].trim();
+    if (cmd) {
+      commands.push(cmd);
+    }
+  }
+
+  return commands;
+};
+
+/**
+ * Autonomni ciklus: executor -> planner -> specijalizirani agent(i) -> executor sažetak.
+ * @param {string} message
+ * @param {Object} options
+ * @returns {Promise<Object>}
+ */
+export const executeAutonomousWorkflow = async (message, options = {}) => {
+  const maxSteps = options.maxSteps || 3;
+  const log = [];
+  let workspaceId = null;
+
+  const executorResponse = await sendChatMessage(message, 'executor', { ...options });
+  log.push({
+    agent: 'executor',
+    prompt: message,
+    response: executorResponse.response
+  });
+
+  const plannerPrompt = `Napravi kratak plan (maksimalno ${maxSteps} koraka) za ovaj zadatak. Vrati čistu numerisanu listu koraka.
+
+ZADATAK: ${message}`;
+  const plannerResponse = await sendChatMessage(plannerPrompt, 'planner', { ...options });
+  log.push({
+    agent: 'planner',
+    prompt: plannerPrompt,
+    response: plannerResponse.response
+  });
+
+  const planSteps = plannerResponse.response
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^\d+[.)\-]/.test(line) || /^[-*]/.test(line))
+    .slice(0, maxSteps)
+    .map((line) => line.replace(/^\d+[.)\-]\s*/, '').replace(/^[-*]\s*/, ''));
+
+  const normalizedSteps = planSteps.length > 0 ? planSteps : [plannerResponse.response.trim()].filter(Boolean).slice(0, maxSteps);
+
+  for (const step of normalizedSteps) {
+    const lowerStep = step.toLowerCase();
+    const chosenAgent = lowerStep.includes('analiz') || lowerStep.includes('podat') ? 'data' : 'code';
+    const stepPrompt = `Izvrši ovaj korak iz plana i vrati konkretan rezultat.
+
+KORAK: ${step}
+
+ORIGINALNI ZADATAK: ${message}`;
+    const stepResponse = await sendChatMessage(stepPrompt, chosenAgent, { ...options });
+
+    log.push({
+      agent: chosenAgent,
+      prompt: stepPrompt,
+      response: stepResponse.response,
+      plan_step: step
+    });
+
+    const shellCommands = extractShellCommands(stepResponse.response);
+    for (const command of shellCommands) {
+      try {
+        const commandResult = await executeSandboxCommand(command, {
+          timeoutSeconds: options.timeoutSeconds || 20,
+          sandbox: options.sandbox !== false,
+          workspaceId,
+          persistWorkspace: true
+        });
+
+        if (commandResult.workspace_id) {
+          workspaceId = commandResult.workspace_id;
+        }
+
+        log.push({
+          agent: 'sandbox-shell',
+          plan_step: step,
+          command,
+          command_result: commandResult
+        });
+      } catch (commandError) {
+        log.push({
+          agent: 'sandbox-shell',
+          plan_step: step,
+          command,
+          command_result: {
+            status: 'error',
+            stderr: commandError.message,
+            exit_code: 1,
+            stdout: ''
+          }
+        });
+      }
+    }
+  }
+
+  const summaryPrompt = `Na osnovu kompletnog dnevnika rada, vrati finalni odgovor korisniku.
+
+DNEVNIK: ${JSON.stringify(log)}
+
+Originalni upit: ${message}`;
+  const summaryResponse = await sendChatMessage(summaryPrompt, 'executor', { ...options });
+  log.push({
+    agent: 'executor',
+    prompt: summaryPrompt,
+    response: summaryResponse.response,
+    phase: 'summary'
+  });
+
+  if (workspaceId) {
+    try {
+      await cleanupSandboxWorkspace(workspaceId);
+    } catch (cleanupError) {
+      log.push({
+        agent: 'sandbox-shell',
+        phase: 'workspace_cleanup',
+        workspace_id: workspaceId,
+        error: cleanupError.message
+      });
+    }
+  }
+
+  return {
+    mode: 'autonomous',
+    original_message: message,
+    plan: normalizedSteps,
+    steps: log,
+    response: summaryResponse.response
+  };
 };
