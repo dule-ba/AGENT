@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { sendChatMessage, executeWorkflow, getCurrentSessionId, resetSession, continueWorkflowExecution, getAvailableModels } from '../api';
+import { sendChatMessage, executeWorkflow, executeAutonomousWorkflow, getCurrentSessionId, resetSession, continueWorkflowExecution, getAvailableModels } from '../api';
 import Prism from 'prismjs';
 import 'prismjs/themes/prism-tomorrow.css';
 import 'prismjs/components/prism-javascript';
@@ -53,7 +53,7 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [mcpServer, setMcpServer] = useState('anthropic');
   const [availableModels, setAvailableModels] = useState([]);
-  const [isWorkflowEnabled, setIsWorkflowEnabled] = useState(false);
+  const [autonomousMode, setAutonomousMode] = useState(false);
 
   // Provjeri aktivnu sesiju prilikom učitavanja
   useEffect(() => {
@@ -91,7 +91,8 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
     setSelectedAgent(localStorage.getItem('selectedAgent') || 'executor');
     setTemperature(parseFloat(localStorage.getItem('temperature') || '0.7'));
     setMcpServer(localStorage.getItem('mcpServer') || 'anthropic');
-    setIsWorkflowEnabled(localStorage.getItem('isWorkflowEnabled') === 'true');
+    setAutomaticWorkflow(localStorage.getItem('isWorkflowEnabled') === 'true' || localStorage.getItem('mcp_auto_workflow') === 'true');
+    setAutonomousMode(localStorage.getItem('autonomousMode') === 'true');
 
     // inicijalni session_id
     const sessionId = getCurrentSessionId();
@@ -111,8 +112,9 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
     localStorage.setItem('selectedAgent', selectedAgent);
     localStorage.setItem('temperature', temperature.toString());
     localStorage.setItem('mcpServer', mcpServer);
-    localStorage.setItem('isWorkflowEnabled', isWorkflowEnabled.toString());
-  }, [selectedModel, selectedAgent, temperature, mcpServer, isWorkflowEnabled]);
+    localStorage.setItem('isWorkflowEnabled', automaticWorkflow.toString());
+    localStorage.setItem('autonomousMode', autonomousMode.toString());
+  }, [selectedModel, selectedAgent, temperature, mcpServer, automaticWorkflow, autonomousMode]);
 
   // Scroll to bottom whenever chat history changes
   useEffect(() => {
@@ -175,8 +177,20 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
       
       let response;
       
-      // Izvršavanje pomoću workflow ili standardnog poziva
-      if (isWorkflowEnabled) {
+      // Izvršavanje pomoću autonomnog režima, workflow ili standardnog poziva
+      if (autonomousMode) {
+        response = await executeAutonomousWorkflow(message, { ...options, maxSteps: 3 });
+
+        const assistantMessage = {
+          id: Date.now().toString() + '-assistant',
+          role: 'assistant',
+          content: response.response,
+          autonomous: true,
+          workflowData: response
+        };
+
+        setChatHistory(prevMessages => [...prevMessages, assistantMessage]);
+      } else if (automaticWorkflow) {
         // Koristi workflow za automatsko generisanje i izvršavanje koda
         response = await executeWorkflow(message, handleWorkflowConfirmation, options);
         
@@ -329,6 +343,11 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
                   <div>
                     <div className="mb-1 text-xs text-gray-400 flex items-center">
                       <span className="capitalize mr-1">{chat.agent || chat.suggested_agent || 'Agent'}</span>
+                      {chat.autonomous && (
+                        <span className="bg-emerald-800 rounded-full px-2 py-0.5 text-xs ml-2">
+                          Autonomous
+                        </span>
+                      )}
                       {chat.workflow && (
                         <span className="bg-indigo-800 rounded-full px-2 py-0.5 text-xs ml-2">
                           Workflow
@@ -423,7 +442,7 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
               </div>
             </div>
             
-            <div className="mt-4 flex items-center">
+            <div className="mt-4 flex items-center justify-between gap-4 flex-wrap">
               <label className="flex items-center cursor-pointer">
                 <input 
                   type="checkbox" 
@@ -437,13 +456,21 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
                 <div className={`${automaticWorkflow ? 'bg-blue-600' : 'bg-gray-700'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors`}>
                   <span className={`${automaticWorkflow ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
                 </div>
-                <span className="ml-2 text-sm text-gray-300">Workflow Mod</span>
+                <span className="ml-2 text-sm text-gray-300">Workflow mod</span>
               </label>
-              <div className="ml-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400 cursor-help" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5A1 1 0 1117 8a1 1 0 01.7 1.7l-3.467 3.467a1 1 0 01-.7.3H7.5a1 1 0 01-.5-2h2.167l3.53-3.53A1 1 0 0118 7a1 1 0 01-1 1h-1.7l-3.467 3.467A1 1 0 119 11a1 1 0 01-1-1v-1h-1v1a1 1 0 01-1 1H5a1 1 0 01-1-1v-2a1 1 0 011-1h2a1 1 0 111 1v1h1V8a1 1 0 01.5-.867A1 1 0 0110 7z" clipRule="evenodd" />
-                </svg>
-              </div>
+
+              <label className="flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={autonomousMode}
+                  onChange={() => setAutonomousMode(!autonomousMode)}
+                  className="sr-only"
+                />
+                <div className={`${autonomousMode ? 'bg-emerald-600' : 'bg-gray-700'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors`}>
+                  <span className={`${autonomousMode ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+                </div>
+                <span className="ml-2 text-sm text-gray-300">Autonomni režim</span>
+              </label>
             </div>
           </div>
         )}
@@ -467,8 +494,8 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
             
             {uploadedImages.map((image, index) => (
               <div key={`image-${index}`} className="bg-gray-700 rounded-lg px-3 py-1 flex items-center text-sm">
-                <img src={URL.createObjectURL(image)} alt="Preview" className="h-5 w-5 object-cover mr-2 rounded" />
-                <span className="mr-2">{image.name}</span>
+                <img src={image.preview} alt="Preview" className="h-5 w-5 object-cover mr-2 rounded" />
+                <span className="mr-2">{image.file.name}</span>
                 <button
                   onClick={() => handleRemoveImage(index)}
                   className="text-gray-400 hover:text-gray-200"
@@ -585,20 +612,9 @@ const ChatBox = ({ onResultChange, onWorkflowResult }) => {
             )}
           </div>
           
-          <div className="flex items-center">
-            <div className="settings-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={isWorkflowEnabled}
-                  onChange={(e) => {
-                    setIsWorkflowEnabled(e.target.checked);
-                    localStorage.setItem('isWorkflowEnabled', e.target.checked.toString());
-                  }}
-                />
-                Workflow Mode
-              </label>
-            </div>
+          <div className="flex items-center gap-3">
+            {automaticWorkflow && <span className="text-blue-400">Workflow uključen</span>}
+            {autonomousMode && <span className="text-emerald-400">Autonomni režim aktivan</span>}
           </div>
         </div>
       </div>

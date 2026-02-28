@@ -823,3 +823,79 @@ export const getTokenUsageStats = async (sessionId = null) => {
     throw error;
   }
 };
+
+/**
+ * Autonomni ciklus: executor -> planner -> specijalizirani agent(i) -> executor sažetak.
+ * @param {string} message
+ * @param {Object} options
+ * @returns {Promise<Object>}
+ */
+export const executeAutonomousWorkflow = async (message, options = {}) => {
+  const maxSteps = options.maxSteps || 3;
+  const log = [];
+
+  const executorResponse = await sendChatMessage(message, 'executor', { ...options });
+  log.push({
+    agent: 'executor',
+    prompt: message,
+    response: executorResponse.response
+  });
+
+  const plannerPrompt = `Napravi kratak plan (maksimalno ${maxSteps} koraka) za ovaj zadatak. Vrati čistu numerisanu listu koraka.
+
+ZADATAK: ${message}`;
+  const plannerResponse = await sendChatMessage(plannerPrompt, 'planner', { ...options });
+  log.push({
+    agent: 'planner',
+    prompt: plannerPrompt,
+    response: plannerResponse.response
+  });
+
+  const planSteps = plannerResponse.response
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^\d+[.)\-]/.test(line) || /^[-*]/.test(line))
+    .slice(0, maxSteps)
+    .map((line) => line.replace(/^\d+[.)\-]\s*/, '').replace(/^[-*]\s*/, ''));
+
+  const normalizedSteps = planSteps.length > 0 ? planSteps : [plannerResponse.response.trim()].filter(Boolean).slice(0, maxSteps);
+
+  for (const step of normalizedSteps) {
+    const lowerStep = step.toLowerCase();
+    const chosenAgent = lowerStep.includes('analiz') || lowerStep.includes('podat') ? 'data' : 'code';
+    const stepPrompt = `Izvrši ovaj korak iz plana i vrati konkretan rezultat.
+
+KORAK: ${step}
+
+ORIGINALNI ZADATAK: ${message}`;
+    const stepResponse = await sendChatMessage(stepPrompt, chosenAgent, { ...options });
+
+    log.push({
+      agent: chosenAgent,
+      prompt: stepPrompt,
+      response: stepResponse.response,
+      plan_step: step
+    });
+  }
+
+  const summaryPrompt = `Na osnovu kompletnog dnevnika rada, vrati finalni odgovor korisniku.
+
+DNEVNIK: ${JSON.stringify(log)}
+
+Originalni upit: ${message}`;
+  const summaryResponse = await sendChatMessage(summaryPrompt, 'executor', { ...options });
+  log.push({
+    agent: 'executor',
+    prompt: summaryPrompt,
+    response: summaryResponse.response,
+    phase: 'summary'
+  });
+
+  return {
+    mode: 'autonomous',
+    original_message: message,
+    plan: normalizedSteps,
+    steps: log,
+    response: summaryResponse.response
+  };
+};
